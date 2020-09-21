@@ -387,17 +387,18 @@ void gatt_profile_db_init(void) {
           .permissions = 0,
       },
       {
-          .type = BTGATT_DB_CHARACTERISTIC,
           .uuid = svr_sup_feat_uuid,
+          .type = BTGATT_DB_CHARACTERISTIC,
           .properties = GATT_CHAR_PROP_BIT_READ,
           .permissions = GATT_PERM_READ,
       },
       {
-          .type = BTGATT_DB_CHARACTERISTIC,
           .uuid = cl_sup_feat_uuid,
+          .type = BTGATT_DB_CHARACTERISTIC,
           .properties = GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_WRITE,
           .permissions = GATT_PERM_READ | GATT_PERM_WRITE,
-      }};
+      }
+  };
 
   GATTS_AddService(gatt_cb.gatt_if, service,
                    sizeof(service) / sizeof(btgatt_db_element_t));

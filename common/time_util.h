@@ -20,6 +20,10 @@
 
 #include <cstdint>
 
+#ifndef CLOCK_BOOTTIME
+#define CLOCK_BOOTTIME CLOCK_REALTIME
+#endif
+
 namespace bluetooth {
 
 namespace common {

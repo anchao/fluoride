@@ -70,6 +70,7 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
 #include <cstdio>
 #include <ctime>
 
+#if !defined(__NuttX__)
 #define LOGWRAPPER(fmt, args...)                                                                                    \
   do {                                                                                                              \
     auto _now = std::chrono::system_clock::now();                                                                   \
@@ -82,28 +83,63 @@ static_assert(LOG_TAG != nullptr, "LOG_TAG is null after header inclusion");
         _buf + l, sizeof(_buf) - l, ".%03u", static_cast<unsigned int>(_now_ms.time_since_epoch().count() % 1000)); \
     fprintf(stderr, "%s %s - %s:%d - %s: " fmt "\n", _buf, LOG_TAG, __FILE__, __LINE__, __func__, ##args);          \
   } while (false)
+#else
+#define LOGWRAPPER(fmt, args...) printf(fmt "\n", ##args)
+#endif
+
+#undef LOG_VERBOSE
+#undef LOG_DEBUG
+#undef LOG_INFO
+#undef LOG_WARNING
+#undef LOG_ERROR
+#undef LOG_FATAL
 
 #ifdef FUZZ_TARGET
 #define LOG_VERBOSE(...)
 #define LOG_DEBUG(...)
 #define LOG_INFO(...)
 #define LOG_WARN(...)
+#define LOG_ERROR(...)
+#elif defined(__NuttX__)
+
+#define LOG_TRACE_TYPE_ERROR   0x00000000
+#define LOG_TRACE_TYPE_WARNING 0x00000001
+#define LOG_TRACE_TYPE_API     0x00000002
+#define LOG_TRACE_TYPE_EVENT   0x00000003
+#define LOG_TRACE_TYPE_DEBUG   0x00000004
+#define LOG_TRACE_TYPE_VERBOSE 0x00000005
+
+#define LOG_VERBOSE(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_VERBOSE) LOGWRAPPER(__VA_ARGS__); } while (false)
+#define LOG_DEBUG(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_DEBUG) LOGWRAPPER(__VA_ARGS__); } while (false)
+#define LOG_INFO(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_API) LOGWRAPPER(__VA_ARGS__); } while (false)
+#define LOG_WARN(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_WARNING) LOGWRAPPER(__VA_ARGS__); } while (false)
+#define LOG_ERROR(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(__VA_ARGS__); } while (false)
+#define LOG_FATAL(...) \
+  do { if (CONFIG_FLUORIDE_LOG_LEVEL >= LOG_TRACE_TYPE_ERROR) LOGWRAPPER(__VA_ARGS__); } while (false)
+
 #else
 #define LOG_VERBOSE(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_DEBUG(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_INFO(...) LOGWRAPPER(__VA_ARGS__)
 #define LOG_WARN(...) LOGWRAPPER(__VA_ARGS__)
-#endif /* FUZZ_TARGET */
 #define LOG_ERROR(...) LOGWRAPPER(__VA_ARGS__)
+#endif /* FUZZ_TARGET */
 #define LOG_ALWAYS_FATAL(...) \
   do {                        \
-    LOGWRAPPER(__VA_ARGS__);  \
+    LOG_FATAL(__VA_ARGS__);  \
     abort();                  \
   } while (false)
 #define android_errorWriteLog(tag, subTag) LOG_ERROR("ERROR tag: 0x%x, sub_tag: %s", tag, subTag)
 #define LOG_EVENT_INT(...)
 
 #endif /* defined(OS_ANDROID) */
+
+#undef ASSERT
 
 #define ASSERT(condition)                                    \
   do {                                                       \

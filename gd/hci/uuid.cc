@@ -18,7 +18,9 @@
 
 #include "hci/uuid.h"
 
+#if !defined(__NuttX__)
 #include <openssl/rand.h>
+#endif
 
 #include <algorithm>
 
@@ -177,7 +179,9 @@ const UUID128Bit& Uuid::To128BitBE() const {
 
 Uuid Uuid::GetRandom() {
   Uuid uuid;
+#if !defined(__NuttX__)
   RAND_bytes(uuid.uu.data(), uuid.uu.size());
+#endif
   return uuid;
 }
 
