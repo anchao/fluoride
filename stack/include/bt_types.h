@@ -26,11 +26,11 @@
 #endif  // __cplusplus
 
 #ifndef FALSE
-#define FALSE false
+#define FALSE 0
 #endif
 
 #ifndef TRUE
-#define TRUE true
+#define TRUE 1
 #endif
 
 #ifdef __arm
@@ -229,7 +229,7 @@ typedef struct {
   uint16_t len;
   uint16_t offset;
   uint16_t layer_specific;
-  uint8_t data[];
+  uint8_t data[0];
 } BT_HDR;
 
 #define BT_HDR_SIZE (sizeof(BT_HDR))
@@ -750,6 +750,7 @@ struct tBLE_BD_ADDR {
 };
 #endif
 
+#ifdef __cplusplus
 /* Device Types
  */
 enum : uint8_t {
@@ -757,6 +758,7 @@ enum : uint8_t {
   BT_DEVICE_TYPE_BLE = (1 << 1),
   BT_DEVICE_TYPE_DUMO = BT_DEVICE_TYPE_BREDR | BT_DEVICE_TYPE_BLE,
 };
+#endif  // __cplusplus
 typedef uint8_t tBT_DEVICE_TYPE;
 #ifdef __cplusplus
 inline std::string DeviceTypeText(tBT_DEVICE_TYPE type) {

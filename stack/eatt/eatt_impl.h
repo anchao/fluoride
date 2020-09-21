@@ -520,7 +520,7 @@ struct eatt_impl {
 
     std::vector<uint16_t> cids = {cid};
 
-    tL2CAP_LE_CFG_INFO cfg = {.mps = eatt_dev->rx_mps_, .mtu = new_mtu};
+    tL2CAP_LE_CFG_INFO cfg = {.mtu = new_mtu, .mps = eatt_dev->rx_mps_};
 
     if (!L2CA_ReconfigCreditBasedConnsReq(eatt_dev->bda_, cids, &cfg))
       LOG(ERROR) << __func__ << "Could not start reconfig cid: " << loghex(cid)
@@ -554,7 +554,7 @@ struct eatt_impl {
       return;
     }
 
-    tL2CAP_LE_CFG_INFO cfg = {.mps = eatt_dev->rx_mps_, .mtu = new_mtu};
+    tL2CAP_LE_CFG_INFO cfg = {.mtu = new_mtu, .mps = eatt_dev->rx_mps_};
 
     if (!L2CA_ReconfigCreditBasedConnsReq(eatt_dev->bda_, cids, &cfg))
       LOG(ERROR) << __func__ << "Could not start reconfig for device "
