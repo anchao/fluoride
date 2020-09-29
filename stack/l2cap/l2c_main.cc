@@ -392,6 +392,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         p_ccb->remote_id = id;
         p_ccb->p_rcb = p_rcb;
         p_ccb->remote_cid = rcid;
+        p_ccb->connection_initiator = L2CAP_INITIATOR_REMOTE;
 
         if (p_rcb->psm == BT_PSM_RFCOMM) {
           btsnoop_get_interface()->add_rfc_l2c_channel(
@@ -677,8 +678,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
                                 p_ccb->local_id, id);
             break;
           }
-          if ((cfg_info.result == L2CAP_CFG_OK) ||
-              (cfg_info.result == L2CAP_CFG_PENDING))
+          if (cfg_info.result == L2CAP_CFG_OK)
             l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONFIG_RSP, &cfg_info);
           else
             l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONFIG_RSP_NEG, &cfg_info);

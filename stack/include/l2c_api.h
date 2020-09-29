@@ -183,7 +183,8 @@ typedef void(tL2CA_CONNECT_IND_CB)(const RawAddress&, uint16_t, uint16_t,
 
 /* Connection confirmation callback prototype. Parameters are
  *              Local CID
- *              Result - 0 = connected, non-zero means failure reason
+ *              Result - 0 = connected
+ *              If there is an error, tL2CA_ERROR_CB is invoked
  */
 typedef void(tL2CA_CONNECT_CFM_CB)(uint16_t, uint16_t);
 
@@ -193,11 +194,15 @@ typedef void(tL2CA_CONNECT_CFM_CB)(uint16_t, uint16_t);
  */
 typedef void(tL2CA_CONFIG_IND_CB)(uint16_t, tL2CAP_CFG_INFO*);
 
+constexpr uint16_t L2CAP_INITIATOR_LOCAL = 1;
+constexpr uint16_t L2CAP_INITIATOR_REMOTE = 0;
 /* Configuration confirm callback prototype. Parameters are
  *              Local CID assigned to the connection
- *              Config result (L2CA_CONN_OK, ...)
+ *              Initiator (1 for local, 0 for remote)
+ *              Initial config from remote
+ * If there is an error, tL2CA_ERROR_CB is invoked
  */
-typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, uint16_t);
+typedef void(tL2CA_CONFIG_CFM_CB)(uint16_t, uint16_t, tL2CAP_CFG_INFO*);
 
 /* Disconnect indication callback prototype. Parameters are
  *              Local CID
@@ -228,6 +233,15 @@ typedef void(tL2CA_CONGESTION_STATUS_CB)(uint16_t, bool);
  */
 typedef void(tL2CA_TX_COMPLETE_CB)(uint16_t, uint16_t);
 
+/*
+ * Notify the user when the remote send error result on ConnectRsp or ConfigRsp
+ * The parameters are:
+ *              Local CID
+ *              Error type (L2CAP_CONN_OTHER_ERROR for ConnectRsp,
+ *                          L2CAP_CFG_FAILED_NO_REASON for ConfigRsp)
+ */
+typedef void(tL2CA_ERROR_CB)(uint16_t, uint16_t);
+
 /* Define the structure that applications use to register with
  * L2CAP. This structure includes callback functions. All functions
  * MUST be provided, with the exception of the "connect pending"
@@ -242,6 +256,7 @@ typedef struct {
   tL2CA_DATA_IND_CB* pL2CA_DataInd_Cb;
   tL2CA_CONGESTION_STATUS_CB* pL2CA_CongestionStatus_Cb;
   tL2CA_TX_COMPLETE_CB* pL2CA_TxComplete_Cb;
+  tL2CA_ERROR_CB* pL2CA_Error_Cb;
 } tL2CAP_APPL_INFO;
 
 /* Define the structure that applications use to create or accept
@@ -348,20 +363,6 @@ extern uint16_t L2CA_ConnectReq2(uint16_t psm, const RawAddress& p_bd_addr,
  *
  ******************************************************************************/
 extern uint16_t L2CA_ConnectReq(uint16_t psm, const RawAddress& p_bd_addr);
-
-/*******************************************************************************
- *
- * Function         L2CA_ConnectRsp
- *
- * Description      Higher layers call this function to accept an incoming
- *                  L2CAP connection, for which they had gotten an connect
- *                  indication callback.
- *
- * Returns          true for success, false for failure
- *
- ******************************************************************************/
-extern bool L2CA_ConnectRsp(const RawAddress& p_bd_addr, uint8_t id,
-                            uint16_t lcid, uint16_t result, uint16_t status);
 
 /*******************************************************************************
  *
@@ -668,8 +669,6 @@ extern bool L2CA_RegisterFixedChannel(uint16_t fixed_cid,
  ******************************************************************************/
 extern bool L2CA_ConnectFixedChnl(uint16_t fixed_cid,
                                   const RawAddress& bd_addr);
-extern bool L2CA_ConnectFixedChnl(uint16_t fixed_cid, const RawAddress& bd_addr,
-                                  uint8_t initiating_phys);
 
 /*******************************************************************************
  *

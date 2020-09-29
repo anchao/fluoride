@@ -1328,7 +1328,6 @@ tL2C_CCB* l2cu_allocate_ccb(tL2C_LCB* p_lcb, uint16_t cid) {
 
   p_ccb->p_lcb = p_lcb;
   p_ccb->p_rcb = NULL;
-  p_ccb->should_free_rcb = false;
 
   /* Set priority then insert ccb into LCB queue (if we have an LCB) */
   p_ccb->ccb_priority = L2CAP_CHNL_PRIORITY_LOW;
@@ -1472,12 +1471,6 @@ void l2cu_release_ccb(tL2C_CCB* p_ccb) {
 
   if (p_rcb && (p_rcb->psm != p_rcb->real_psm)) {
     BTM_SecClrServiceByPsm(p_rcb->psm);
-  }
-
-  if (p_ccb->should_free_rcb) {
-    osi_free(p_rcb);
-    p_ccb->p_rcb = NULL;
-    p_ccb->should_free_rcb = false;
   }
 
   /* Free the timer */
@@ -2955,11 +2948,9 @@ void l2cu_set_acl_hci_header(BT_HDR* p_buf, tL2C_CCB* p_ccb) {
       UINT16_TO_STREAM(p, p_buf->len);
     }
   } else {
-    if ((((p_buf->layer_specific & L2CAP_FLUSHABLE_MASK) ==
-          L2CAP_FLUSHABLE_CH_BASED) &&
-         (p_ccb->is_flushable)) ||
-        ((p_buf->layer_specific & L2CAP_FLUSHABLE_MASK) ==
-         L2CAP_FLUSHABLE_PKT)) {
+    if (((p_buf->layer_specific & L2CAP_FLUSHABLE_MASK) ==
+         L2CAP_FLUSHABLE_CH_BASED) &&
+        (p_ccb->is_flushable)) {
       UINT16_TO_STREAM(p, p_ccb->p_lcb->Handle() |
                               (L2CAP_PKT_START << L2CAP_PKT_TYPE_SHIFT));
     } else {
