@@ -41,7 +41,6 @@
 
 using base::StringPrintf;
 
-void btm_ble_increment_link_topology_mask(uint8_t link_role);
 tL2CAP_LE_RESULT_CODE btm_ble_start_sec_check(const RawAddress& bd_addr,
                                               uint16_t psm, bool is_originator,
                                               tBTM_SEC_CALLBACK* p_callback,
@@ -239,24 +238,26 @@ uint16_t L2CA_GetDisconnectReason(const RawAddress& remote_bda,
  ******************************************************************************/
 void l2cble_notify_le_connection(const RawAddress& bda) {
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bda, BT_TRANSPORT_LE);
-  tL2C_CCB* p_ccb;
+  if (p_lcb == nullptr) {
+    LOG_WARN("Received notification for le connection but no lcb found");
+    return;
+  }
 
-  if (p_lcb != NULL && BTM_IsAclConnectionUp(bda, BT_TRANSPORT_LE) &&
+  if (BTM_IsAclConnectionUp(bda, BT_TRANSPORT_LE) &&
       p_lcb->link_state != LST_CONNECTED) {
     /* update link status */
+    // TODO Move this back into acl layer
     btm_establish_continue_from_address(bda, BT_TRANSPORT_LE);
     /* update l2cap link status and send callback */
     p_lcb->link_state = LST_CONNECTED;
     l2cu_process_fixed_chnl_resp(p_lcb);
   }
 
-  if (p_lcb != NULL) {
-    /* For all channels, send the event through their FSMs */
-    for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb;
-         p_ccb = p_ccb->p_next_ccb) {
-      if (p_ccb->chnl_state == CST_CLOSED)
-        l2c_csm_execute(p_ccb, L2CEVT_LP_CONNECT_CFM, NULL);
-    }
+  /* For all channels, send the event through their FSMs */
+  for (tL2C_CCB* p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb;
+       p_ccb = p_ccb->p_next_ccb) {
+    if (p_ccb->chnl_state == CST_CLOSED)
+      l2c_csm_execute(p_ccb, L2CEVT_LP_CONNECT_CFM, NULL);
   }
 }
 
@@ -265,15 +266,8 @@ void l2cble_notify_le_connection(const RawAddress& bda) {
 void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
                       tBLE_ADDR_TYPE type, uint16_t conn_interval,
                       uint16_t conn_latency, uint16_t conn_timeout) {
-  btm_ble_increment_link_topology_mask(role);
-
   // role == HCI_ROLE_MASTER => scanner completed connection
   // role == HCI_ROLE_SLAVE => advertiser completed connection
-
-  L2CAP_TRACE_DEBUG(
-      "%s: HANDLE=%d addr_type=%d conn_interval=%d "
-      "slave_latency=%d supervision_tout=%d",
-      __func__, handle, type, conn_interval, conn_latency, conn_timeout);
 
   /* See if we have a link control block for the remote device */
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bda, BT_TRANSPORT_LE);
@@ -283,25 +277,26 @@ void l2cble_conn_comp(uint16_t handle, uint8_t role, const RawAddress& bda,
     p_lcb = l2cu_allocate_lcb(bda, false, BT_TRANSPORT_LE);
     if (!p_lcb) {
       btm_sec_disconnect(handle, HCI_ERR_NO_CONNECTION);
-      LOG(ERROR) << __func__ << "failed to allocate LCB";
+      LOG_ERROR("Unable to allocate link resource for le acl connection");
       return;
     } else {
       if (!l2cu_initialize_fixed_ccb(p_lcb, L2CAP_ATT_CID)) {
         btm_sec_disconnect(handle, HCI_ERR_NO_CONNECTION);
-        LOG(WARNING) << __func__ << "LCB but no CCB";
+        LOG_ERROR("Unable to allocate channel resource for le acl connection");
         return;
       }
     }
   } else if (role == HCI_ROLE_MASTER && p_lcb->link_state != LST_CONNECTING) {
-    LOG(ERROR) << "L2CAP got BLE scanner conn_comp in bad state: "
-               << +p_lcb->link_state;
+    LOG_ERROR(
+        "Received le acl connection as role master but not in connecting "
+        "state");
     return;
   }
 
   if (role == HCI_ROLE_MASTER) alarm_cancel(p_lcb->l2c_lcb_timer);
 
   /* Save the handle */
-  p_lcb->SetHandle(handle);
+  l2cu_set_lcb_handle(*p_lcb, handle);
 
   /* Connected OK. Change state to connected, we were scanning so we are master
    */
@@ -632,6 +627,11 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
       p_ccb->remote_id = id;
       p_ccb->p_rcb = p_rcb;
       p_ccb->remote_cid = rcid;
+
+      p_ccb->local_conn_cfg.mtu = L2CAP_SDU_LENGTH_LE_MAX;
+      p_ccb->local_conn_cfg.mps =
+          controller_get_interface()->get_acl_data_size_ble();
+      p_ccb->local_conn_cfg.credits = L2CAP_LE_CREDIT_DEFAULT,
 
       p_ccb->peer_conn_cfg.mtu = mtu;
       p_ccb->peer_conn_cfg.mps = mps;

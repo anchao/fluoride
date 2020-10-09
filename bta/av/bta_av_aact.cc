@@ -1067,7 +1067,7 @@ void bta_av_setconfig_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   /* we like this codec_type. find the sep_idx */
   local_sep = bta_av_get_scb_sep_type(p_scb, avdt_handle);
   bta_av_adjust_seps_idx(p_scb, avdt_handle);
-  LOG_DEBUG(
+  LOG_INFO(
       "%s: peer %s bta_handle=0x%x avdt_handle=%d sep_idx=%d cur_psc_mask:0x%x",
       __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl,
       p_scb->avdt_handle, p_scb->sep_idx, p_scb->cur_psc_mask);
@@ -1677,8 +1677,8 @@ void bta_av_getcap_results(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     else if (uuid_int == UUID_SERVCLASS_AUDIO_SINK)
       bta_av_adjust_seps_idx(p_scb,
                              bta_av_get_scb_handle(p_scb, AVDT_TSEP_SNK));
-    LOG_DEBUG("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
-              p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
+    LOG_INFO("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
+             p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
 
     /* use only the services peer supports */
     cfg.psc_mask &= p_scb->peer_cap.psc_mask;
@@ -1727,8 +1727,8 @@ void bta_av_setconfig_rej(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   uint8_t avdt_handle = p_data->ci_setconfig.avdt_handle;
 
   bta_av_adjust_seps_idx(p_scb, avdt_handle);
-  LOG_DEBUG("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
-            p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
+  LOG_INFO("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
+           p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
   AVDT_ConfigRsp(p_scb->avdt_handle, p_scb->avdt_label, AVDT_ERR_UNSUP_CFG, 0);
 
   reject.bd_addr = p_data->str_msg.bd_addr;
@@ -1882,7 +1882,6 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->co_started = false;
 
     p_scb->p_cos->stop(p_scb->hndl, p_scb->PeerAddress());
-    L2CA_SetFlushTimeout(p_scb->PeerAddress(), L2CAP_DEFAULT_FLUSH_TO);
   }
 
   /* if q_info.a2dp_list is not empty, drop it now */
@@ -2164,7 +2163,6 @@ void bta_av_data_path(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
 void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   bool initiator = false;
   bool suspend = false;
-  uint16_t flush_to;
   uint8_t new_role = p_scb->role;
   BT_HDR hdr;
   uint8_t cur_role;
@@ -2273,11 +2271,7 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
      * to be changed
      */
     p_scb->co_started = bta_av_cb.audio_open_cnt;
-    flush_to = p_bta_av_cfg->p_audio_flush_to[p_scb->co_started - 1];
-  } else {
-    flush_to = 0;
   }
-  L2CA_SetFlushTimeout(p_scb->PeerAddress(), flush_to);
 
   /* clear the congestion flag */
   p_scb->cong = false;
@@ -2516,7 +2510,6 @@ void bta_av_suspend_cfm(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       p_scb->co_started = false;
       p_scb->p_cos->stop(p_scb->hndl, p_scb->PeerAddress());
     }
-    L2CA_SetFlushTimeout(p_scb->PeerAddress(), L2CAP_DEFAULT_FLUSH_TO);
   }
 
   {
@@ -2807,8 +2800,8 @@ void bta_av_rcfg_open(tBTA_AV_SCB* p_scb, UNUSED_ATTR tBTA_AV_DATA* p_data) {
     /* we may choose to use a different SEP at reconfig.
      * adjust the sep_idx now */
     bta_av_adjust_seps_idx(p_scb, bta_av_get_scb_handle(p_scb, AVDT_TSEP_SRC));
-    LOG_DEBUG("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
-              p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
+    LOG_INFO("%s: sep_idx=%d avdt_handle=%d bta_handle=0x%x", __func__,
+             p_scb->sep_idx, p_scb->avdt_handle, p_scb->hndl);
 
     /* open the stream with the new config */
     p_scb->sep_info_idx = p_scb->rcfg_idx;
@@ -2877,9 +2870,6 @@ void bta_av_chk_2nd_start(tBTA_AV_SCB* p_scb,
           // May need to update the flush timeout of this already started stream
           if (p_scbi->co_started != bta_av_cb.audio_open_cnt) {
             p_scbi->co_started = bta_av_cb.audio_open_cnt;
-            L2CA_SetFlushTimeout(
-                p_scbi->PeerAddress(),
-                p_bta_av_cfg->p_audio_flush_to[p_scbi->co_started - 1]);
           }
         }
       }

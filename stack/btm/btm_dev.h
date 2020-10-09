@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "gd/os/log.h"
+#include "osi/include/log.h"
 #include "stack/btm/btm_ble_int.h"
 #include "stack/btm/security_device_record.h"
 #include "stack/include/acl_api.h"
@@ -177,7 +177,8 @@ tBTM_SEC_DEV_REC* btm_sec_allocate_dev_rec(void);
  * Returns          The device bond type if known, otherwise BOND_TYPE_UNKNOWN
  *
  ******************************************************************************/
-tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr);
+tBTM_SEC_DEV_REC::tBTM_BOND_TYPE btm_get_bond_type_dev(
+    const RawAddress& bd_addr);
 
 /*******************************************************************************
  *
@@ -189,4 +190,5 @@ tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr);
  * Returns          true on success, otherwise false
  *
  ******************************************************************************/
-bool btm_set_bond_type_dev(const RawAddress& bd_addr, tBTM_BOND_TYPE bond_type);
+bool btm_set_bond_type_dev(const RawAddress& bd_addr,
+                           tBTM_SEC_DEV_REC::tBTM_BOND_TYPE bond_type);

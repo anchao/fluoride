@@ -41,6 +41,7 @@
 #include "stack/include/btm_iso_api.h"
 #include "stack/include/btu.h"
 #include "stack/include/dev_hci_link_interface.h"
+#include "stack/include/gatt_api.h"
 #include "stack/include/hci_evt_length.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/inq_hci_link_interface.h"
@@ -323,8 +324,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
       btu_hcif_role_change_evt(p);
       break;
     case HCI_NUM_COMPL_DATA_PKTS_EVT:
-      l2c_link_process_num_completed_pkts(p, hci_evt_len);
-      IsoManager::GetInstance()->HandleNumComplDataPkts(p, hci_evt_len);
+      acl_process_num_completed_pkts(p, hci_evt_len);
       break;
     case HCI_MODE_CHANGE_EVT:
       btu_hcif_mode_change_evt(p);
@@ -1708,7 +1708,7 @@ static void btu_hcif_encryption_key_refresh_cmpl_evt(uint8_t* p) {
 
 extern void gatt_notify_conn_update(uint16_t handle, uint16_t interval,
                                     uint16_t latency, uint16_t timeout,
-                                    uint8_t status);
+                                    tGATT_STATUS status);
 
 static void btu_ble_ll_conn_param_upd_evt(uint8_t* p, uint16_t evt_len) {
   /* LE connection update has completed successfully as a master. */
@@ -1728,7 +1728,8 @@ static void btu_ble_ll_conn_param_upd_evt(uint8_t* p, uint16_t evt_len) {
 
   l2cble_process_conn_update_evt(handle, status, interval, latency, timeout);
 
-  gatt_notify_conn_update(handle & 0x0FFF, interval, latency, timeout, status);
+  gatt_notify_conn_update(handle & 0x0FFF, interval, latency, timeout,
+                          static_cast<tGATT_STATUS>(status));
 }
 
 static void btu_ble_proc_ltk_req(uint8_t* p) {

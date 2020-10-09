@@ -216,6 +216,15 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     return ::grpc::Status::OK;
   }
 
+  ::grpc::Status SetLeMaximumEncryptionKeySize(
+      ::grpc::ServerContext* context,
+      const LeMaximumEncryptionKeySizeMessage* request,
+      ::google::protobuf::Empty* response) override {
+    security_module_->GetFacadeConfigurationApi()->SetLeMaximumEncryptionKeySize(
+        request->maximum_encryption_key_size());
+    return ::grpc::Status::OK;
+  }
+
   ::grpc::Status SetLeOobDataPresent(
       ::grpc::ServerContext* context,
       const LeOobDataPresentMessage* request,
@@ -339,8 +348,10 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_yes_no);
   }
 
-  virtual void DisplayConfirmValue(const bluetooth::hci::AddressWithType& peer, std::string name,
-                                   uint32_t numeric_value) {
+  virtual void DisplayConfirmValue(ConfirmationData data) {
+    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
+    std::string name = data.GetName();
+    uint32_t numeric_value = data.GetNumericValue();
     LOG_INFO("%s value = 0x%x", peer.ToString().c_str(), numeric_value);
     UiMsg display_with_value;
     *display_with_value.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -350,7 +361,9 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_with_value);
   }
 
-  void DisplayYesNoDialog(const bluetooth::hci::AddressWithType& peer, std::string name) override {
+  void DisplayYesNoDialog(ConfirmationData data) override {
+    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
+    std::string name = data.GetName();
     LOG_INFO("%s", peer.ToString().c_str());
     UiMsg display_yes_no;
     *display_yes_no.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -359,7 +372,10 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_yes_no);
   }
 
-  void DisplayPasskey(const bluetooth::hci::AddressWithType& peer, std::string name, uint32_t passkey) override {
+  void DisplayPasskey(ConfirmationData data) override {
+    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
+    std::string name = data.GetName();
+    uint32_t passkey = data.GetNumericValue();
     LOG_INFO("%s value = 0x%x", peer.ToString().c_str(), passkey);
     UiMsg display_passkey;
     *display_passkey.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -369,7 +385,9 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     ui_events_.OnIncomingEvent(display_passkey);
   }
 
-  void DisplayEnterPasskeyDialog(const bluetooth::hci::AddressWithType& peer, std::string name) override {
+  void DisplayEnterPasskeyDialog(ConfirmationData data) override {
+    const bluetooth::hci::AddressWithType& peer = data.GetAddressWithType();
+    std::string name = data.GetName();
     LOG_INFO("%s", peer.ToString().c_str());
     UiMsg display_passkey_input;
     *display_passkey_input.mutable_peer() = ToFacadeAddressWithType(peer);
@@ -405,11 +423,12 @@ class SecurityModuleFacadeService : public SecurityModuleFacade::Service, public
     bond_events_.OnIncomingEvent(unbonded);
   }
 
-  void OnDeviceBondFailed(hci::AddressWithType peer) override {
+  void OnDeviceBondFailed(hci::AddressWithType peer, PairingFailure status) override {
     LOG_INFO("%s", peer.ToString().c_str());
     BondMsg bond_failed;
     *bond_failed.mutable_peer() = ToFacadeAddressWithType(peer);
     bond_failed.set_message_type(BondMsgType::DEVICE_BOND_FAILED);
+    bond_failed.set_reason(static_cast<uint8_t>(status.reason));
     bond_events_.OnIncomingEvent(bond_failed);
   }
 

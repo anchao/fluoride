@@ -138,7 +138,7 @@ void gatt_act_discovery(tGATT_CLCB* p_clcb) {
  ******************************************************************************/
 void gatt_act_read(tGATT_CLCB* p_clcb, uint16_t offset) {
   tGATT_TCB& tcb = *p_clcb->p_tcb;
-  uint8_t rt = GATT_INTERNAL_ERROR;
+  tGATT_STATUS rt = GATT_INTERNAL_ERROR;
   tGATT_CL_MSG msg;
   uint8_t op_code = 0;
 
@@ -220,8 +220,8 @@ void gatt_act_write(tGATT_CLCB* p_clcb, uint8_t sec_act) {
       p_clcb->s_handle = attr.handle;
       uint8_t op_code = (sec_act == GATT_SEC_SIGN_DATA) ? GATT_SIGN_CMD_WRITE
                                                         : GATT_CMD_WRITE;
-      uint8_t rt = gatt_send_write_msg(tcb, p_clcb, op_code, attr.handle,
-                                       attr.len, 0, attr.value);
+      tGATT_STATUS rt = gatt_send_write_msg(tcb, p_clcb, op_code, attr.handle,
+                                            attr.len, 0, attr.value);
       if (rt != GATT_CMD_STARTED) {
         if (rt != GATT_SUCCESS) {
           LOG(ERROR) << StringPrintf(
@@ -236,8 +236,8 @@ void gatt_act_write(tGATT_CLCB* p_clcb, uint8_t sec_act) {
       if (attr.len <= (payload_size - GATT_HDR_SIZE)) {
         p_clcb->s_handle = attr.handle;
 
-        uint8_t rt = gatt_send_write_msg(tcb, p_clcb, GATT_REQ_WRITE,
-                                         attr.handle, attr.len, 0, attr.value);
+        tGATT_STATUS rt = gatt_send_write_msg(
+            tcb, p_clcb, GATT_REQ_WRITE, attr.handle, attr.len, 0, attr.value);
         if (rt != GATT_SUCCESS && rt != GATT_CMD_STARTED &&
             rt != GATT_CONGESTED) {
           if (rt != GATT_SUCCESS) {
@@ -275,7 +275,7 @@ void gatt_act_write(tGATT_CLCB* p_clcb, uint8_t sec_act) {
  ******************************************************************************/
 void gatt_send_queue_write_cancel(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                                   tGATT_EXEC_FLAG flag) {
-  uint8_t rt;
+  tGATT_STATUS rt;
 
   VLOG(1) << __func__;
 
@@ -348,10 +348,10 @@ void gatt_send_prepare_write(tGATT_TCB& tcb, tGATT_CLCB* p_clcb) {
 
   VLOG(1) << StringPrintf("offset =0x%x len=%d", offset, to_send);
 
-  uint8_t rt = gatt_send_write_msg(tcb, p_clcb, GATT_REQ_PREPARE_WRITE,
-                                   p_attr->handle, to_send, /* length */
-                                   offset,                  /* used as offset */
-                                   p_attr->value + p_attr->offset); /* data */
+  tGATT_STATUS rt = gatt_send_write_msg(
+      tcb, p_clcb, GATT_REQ_PREPARE_WRITE, p_attr->handle, to_send, /* length */
+      offset,                          /* used as offset */
+      p_attr->value + p_attr->offset); /* data */
 
   /* remember the write long attribute length */
   p_clcb->counter = to_send;
@@ -509,7 +509,8 @@ void gatt_proc_disc_error_rsp(UNUSED_ATTR tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
 void gatt_process_error_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                             UNUSED_ATTR uint8_t op_code,
                             UNUSED_ATTR uint16_t len, uint8_t* p_data) {
-  uint8_t opcode, reason, *p = p_data;
+  uint8_t opcode, *p = p_data;
+  uint8_t reason;
   uint16_t handle;
   tGATT_VALUE* p_attr = (tGATT_VALUE*)p_clcb->p_attr_buf;
 
@@ -526,7 +527,7 @@ void gatt_process_error_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
     // specification, then the Error Response shall still be considered to state
     // that the given request cannot be performed for an unknown reason."
     opcode = handle = 0;
-    reason = 0x7F;
+    reason = static_cast<tGATT_STATUS>(0x7f);
   } else {
     STREAM_TO_UINT8(opcode, p);
     STREAM_TO_UINT16(handle, p);
@@ -534,13 +535,14 @@ void gatt_process_error_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
   }
 
   if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY) {
-    gatt_proc_disc_error_rsp(tcb, p_clcb, opcode, handle, reason);
+    gatt_proc_disc_error_rsp(tcb, p_clcb, opcode, handle,
+                             static_cast<tGATT_STATUS>(reason));
   } else {
     if ((p_clcb->operation == GATTC_OPTYPE_WRITE) &&
         (p_clcb->op_subtype == GATT_WRITE) &&
         (opcode == GATT_REQ_PREPARE_WRITE) && (p_attr) &&
         (handle == p_attr->handle)) {
-      p_clcb->status = reason;
+      p_clcb->status = static_cast<tGATT_STATUS>(reason);
       gatt_send_queue_write_cancel(tcb, p_clcb, GATT_PREP_WRITE_CANCEL);
     } else if ((p_clcb->operation == GATTC_OPTYPE_READ) &&
                ((p_clcb->op_subtype == GATT_READ_CHAR_VALUE_HDL) ||
@@ -550,7 +552,7 @@ void gatt_process_error_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
                (reason == GATT_NOT_LONG)) {
       gatt_end_operation(p_clcb, GATT_SUCCESS, (void*)p_clcb->p_attr_buf);
     } else
-      gatt_end_operation(p_clcb, reason, NULL);
+      gatt_end_operation(p_clcb, static_cast<tGATT_STATUS>(reason), NULL);
   }
 }
 /*******************************************************************************
@@ -776,6 +778,12 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
     /* discover included service */
     else if (p_clcb->operation == GATTC_OPTYPE_DISCOVERY &&
              p_clcb->op_subtype == GATT_DISC_INC_SRVC) {
+      if (value_len < 4) {
+        android_errorWriteLog(0x534e4554, "158833854");
+        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 4.";
+        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
+        return;
+      }
       STREAM_TO_UINT16(record_value.incl_service.s_handle, p);
       STREAM_TO_UINT16(record_value.incl_service.e_handle, p);
 
@@ -829,6 +837,12 @@ void gatt_process_read_by_type_rsp(tGATT_TCB& tcb, tGATT_CLCB* p_clcb,
       return;
     } else /* discover characterisitic */
     {
+      if (value_len < 3) {
+        android_errorWriteLog(0x534e4554, "158778659");
+        LOG(ERROR) << __func__ << " Illegal Response length, must be at least 3.";
+        gatt_end_operation(p_clcb, GATT_INVALID_PDU, NULL);
+        return;
+      }
       STREAM_TO_UINT8(record_value.dclr_value.char_prop, p);
       STREAM_TO_UINT16(record_value.dclr_value.val_handle, p);
       if (!GATT_HANDLE_IS_VALID(record_value.dclr_value.val_handle)) {

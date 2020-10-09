@@ -918,7 +918,7 @@ void btm_ble_set_adv_flag(uint16_t connect_mode, uint16_t disc_mode) {
 
   btm_ble_update_dmt_flag_bits(&flag, connect_mode, disc_mode);
 
-  LOG_DEBUG("disc_mode %04x", disc_mode);
+  LOG_INFO("disc_mode %04x", disc_mode);
   /* update discoverable flag */
   if (disc_mode & BTM_BLE_LIMITED_DISCOVERABLE) {
     flag &= ~BTM_BLE_GEN_DISC_FLAG;
@@ -1569,17 +1569,16 @@ void btm_ble_update_inq_result(tINQ_DB_ENT* p_i, uint8_t addr_type,
     }
   }
 
-  /* if BR/EDR not supported is not set, assume is a DUMO device */
   if ((p_cur->flag & BTM_BLE_BREDR_NOT_SPT) == 0 &&
       !ble_evt_type_is_directed(evt_type)) {
     if (p_cur->ble_addr_type != BLE_ADDR_RANDOM) {
-      BTM_TRACE_DEBUG("BR/EDR NOT support bit not set, treat as DUMO");
+      LOG_INFO("NOT_BR_EDR support bit not set, treat device as DUMO");
       p_cur->device_type |= BT_DEVICE_TYPE_DUMO;
     } else {
-      BTM_TRACE_DEBUG("Random address, treating device as LE only");
+      LOG_INFO("Random address, treat device as LE only");
     }
   } else {
-    BTM_TRACE_DEBUG("BR/EDR NOT SUPPORT bit set, LE only device");
+    LOG_INFO("NOT_BR/EDR support bit set, treat device as LE only");
   }
 }
 
@@ -1877,7 +1876,7 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, uint8_t addr_type,
   uint8_t result = btm_ble_is_discoverable(bda, adv_data);
   if (result == 0) {
     cache.Clear(addr_type, bda);
-    LOG_DEBUG("device no longer discoverable, discarding advertising packet");
+    LOG_INFO("device no longer discoverable, discarding advertising packet");
     return;
   }
 
@@ -1910,7 +1909,8 @@ void btm_ble_process_phy_update_pkt(uint8_t len, uint8_t* data) {
   STREAM_TO_UINT8(tx_phy, p);
   STREAM_TO_UINT8(rx_phy, p);
 
-  gatt_notify_phy_updated(status, handle, tx_phy, rx_phy);
+  gatt_notify_phy_updated(static_cast<tGATT_STATUS>(status), handle, tx_phy,
+                          rx_phy);
 }
 
 /*******************************************************************************
@@ -2181,8 +2181,6 @@ static void btm_ble_observer_timer_timeout(UNUSED_ATTR void* data) {
  *
  ******************************************************************************/
 void btm_ble_read_remote_features_complete(uint8_t* p) {
-  BTM_TRACE_EVENT("%s", __func__);
-
   uint16_t handle;
   uint8_t status;
   STREAM_TO_UINT8(status, p);
@@ -2190,15 +2188,18 @@ void btm_ble_read_remote_features_complete(uint8_t* p) {
   handle = handle & 0x0FFF;  // only 12 bits meaningful
 
   if (status != HCI_SUCCESS) {
-    BTM_TRACE_ERROR("%s: failed for handle: 0x%04d, status 0x%02x", __func__,
-                    handle, status);
-    if (status != HCI_ERR_UNSUPPORTED_REM_FEATURE) return;
+    if (status != HCI_ERR_UNSUPPORTED_REM_FEATURE) {
+      LOG_ERROR("Failed to read remote features status:%s",
+                hci_error_code_text(status).c_str());
+      return;
+    }
+    LOG_WARN("Remote does not support reading remote feature");
   }
 
   if (status == HCI_SUCCESS) {
     if (!acl_set_peer_le_features_from_handle(handle, p)) {
-      BTM_TRACE_ERROR("%s: can't find acl for handle: 0x%04d", __func__,
-                      handle);
+      LOG_ERROR(
+          "Unable to find existing connection after read remote features");
       return;
     }
   }

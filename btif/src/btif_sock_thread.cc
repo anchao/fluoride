@@ -150,7 +150,6 @@ static void free_thread_slot(int h) {
 }
 void btsock_thread_init() {
   static int initialized;
-  APPL_TRACE_DEBUG("in initialized:%d", initialized);
   if (!initialized) {
     initialized = 1;
     int h;
@@ -409,10 +408,9 @@ static int process_cmd_sock(int h) {
   OSI_NO_INTR(ret = recv(fd, &cmd, sizeof(cmd), MSG_WAITALL));
 
   if (ret != sizeof(cmd)) {
-    APPL_TRACE_ERROR("recv cmd errno:%d", errno);
+    LOG_ERROR("recv cmd errno:%d", errno);
     return false;
   }
-  APPL_TRACE_DEBUG("cmd.id:%d", cmd.id);
   switch (cmd.id) {
     case CMD_ADD_FD:
       add_poll(h, cmd.fd, cmd.type, cmd.flags, cmd.user_id);
@@ -523,7 +521,7 @@ static void* sock_poll_thread(void* arg) {
       }
       if (need_process_data_fd) process_data_sock(h, pfds, ret);
     } else {
-      LOG_DEBUG("no data, select ret: %d", ret);
+      LOG_INFO("no data, select ret: %d", ret);
     };
   }
   LOG_INFO("socket poll thread exiting, h:%d", h);

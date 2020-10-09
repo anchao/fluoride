@@ -52,8 +52,10 @@
 #define L2CAP_DW_CONGESTED 2
 
 /* Values for priority parameter to L2CA_SetAclPriority */
-#define L2CAP_PRIORITY_NORMAL 0
-#define L2CAP_PRIORITY_HIGH 1
+typedef enum : uint8_t {
+  L2CAP_PRIORITY_NORMAL = 0,
+  L2CAP_PRIORITY_HIGH = 1,
+} tL2CAP_PRIORITY;
 
 /* Values for priority parameter to L2CA_SetTxPriority */
 #define L2CAP_CHNL_PRIORITY_HIGH 0
@@ -314,18 +316,6 @@ extern void L2CA_Deregister(uint16_t psm);
 
 /*******************************************************************************
  *
- * Function         L2CA_AllocatePSM
- *
- * Description      Other layers call this function to find an unused PSM for
- *                  L2CAP services.
- *
- * Returns          PSM to use.
- *
- ******************************************************************************/
-extern uint16_t L2CA_AllocatePSM(void);
-
-/*******************************************************************************
- *
  * Function         L2CA_AllocateLePSM
  *
  * Description      Other layers call this function to find an unused LE PSM for
@@ -530,7 +520,8 @@ extern uint16_t L2CA_FlushChannel(uint16_t lcid, uint16_t num_to_flush);
  * Returns          true if a valid channel, else false
  *
  ******************************************************************************/
-extern bool L2CA_SetAclPriority(const RawAddress& bd_addr, uint8_t priority);
+extern bool L2CA_SetAclPriority(const RawAddress& bd_addr,
+                                tL2CAP_PRIORITY priority);
 
 /*******************************************************************************
  *
@@ -542,33 +533,6 @@ extern bool L2CA_SetAclPriority(const RawAddress& bd_addr, uint8_t priority);
  *
  ******************************************************************************/
 extern bool L2CA_SetTxPriority(uint16_t cid, tL2CAP_CHNL_PRIORITY priority);
-
-/*******************************************************************************
- *
- * Function         L2CA_SetFlushTimeout
- *
- * Description      This function set the automatic flush time out in Baseband
- *                  for ACL-U packets.
- *                  BdAddr : the remote BD address of ACL link. If it is
- *                           BT_DB_ANY then the flush time out will be applied
- *                           to all ACL link.
- *                  FlushTimeout: flush time out in ms
- *                           0x0000 : No automatic flush
- *                           L2CAP_NO_RETRANSMISSION : No retransmission
- *                           0x0002 - 0xFFFE : flush time out, if
- *                                             (flush_tout * 8) + 3 / 5) <=
- *                                             HCI_MAX_AUTOMATIC_FLUSH_TIMEOUT
- *                                             (in 625us slot).
- *                                    Otherwise, return false.
- *                           L2CAP_NO_AUTOMATIC_FLUSH : No automatic flush
- *
- * Returns          true if command succeeded, false if failed
- *
- * NOTE             This flush timeout applies to all logical channels active on
- *                  the ACL link.
- ******************************************************************************/
-extern bool L2CA_SetFlushTimeout(const RawAddress& bd_addr,
-                                 uint16_t flush_tout);
 
 /*******************************************************************************
  *
@@ -636,8 +600,6 @@ typedef struct {
   tL2CA_FIXED_CONGESTION_STATUS_CB* pL2CA_FixedCong_Cb;
 
   uint16_t default_idle_tout;
-  tL2CA_TX_COMPLETE_CB*
-      pL2CA_FixedTxComplete_Cb; /* fixed channel tx complete callback */
 } tL2CAP_FIXED_CHNL_REG;
 
 /*******************************************************************************

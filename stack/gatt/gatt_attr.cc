@@ -32,6 +32,7 @@
 
 #include "gatt_api.h"
 #include "gatt_int.h"
+#include "osi/include/log.h"
 #include "osi/include/osi.h"
 
 using base::StringPrintf;
@@ -240,8 +241,8 @@ tGATT_STATUS proc_read_req(uint16_t conn_id, tGATTS_REQ_TYPE,
 }
 
 /** GAP ATT server process a write request */
-uint8_t proc_write_req(uint16_t conn_id, tGATTS_REQ_TYPE,
-                       tGATT_WRITE_REQ* p_data) {
+tGATT_STATUS proc_write_req(uint16_t conn_id, tGATTS_REQ_TYPE,
+                            tGATT_WRITE_REQ* p_data) {
   /* GATT_UUID_SERVER_SUP_FEAT*/
   if (p_data->handle == gatt_cb.handle_sr_supported_feat)
     return GATT_WRITE_NOT_PERMIT;
@@ -282,7 +283,7 @@ uint8_t proc_write_req(uint16_t conn_id, tGATTS_REQ_TYPE,
  ******************************************************************************/
 static void gatt_request_cback(uint16_t conn_id, uint32_t trans_id,
                                tGATTS_REQ_TYPE type, tGATTS_DATA* p_data) {
-  uint8_t status = GATT_INVALID_PDU;
+  tGATT_STATUS status = GATT_INVALID_PDU;
   tGATTS_RSP rsp_msg;
   bool rsp_needed = true;
 
@@ -459,12 +460,18 @@ static void gatt_disc_res_cback(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
 static void gatt_disc_cmpl_cback(uint16_t conn_id, tGATT_DISC_TYPE disc_type,
                                  tGATT_STATUS status) {
   tGATT_PROFILE_CLCB* p_clcb = gatt_profile_find_clcb_by_conn_id(conn_id);
+  if (p_clcb == NULL) {
+    LOG_WARN("Unable to find gatt profile after discovery complete");
+    return;
+  }
 
-  if (p_clcb == NULL) return;
-
-  if (status != GATT_SUCCESS || p_clcb->ccc_result == 0) {
-    LOG(WARNING) << __func__
-                 << ": Unable to register for service changed indication";
+  if (status != GATT_SUCCESS) {
+    LOG_WARN("Gatt discovery completed with errors status:%u", status);
+    return;
+  }
+  if (p_clcb->ccc_result == 0) {
+    LOG_WARN("Gatt discovery completed but connection was idle id:%hu",
+             conn_id);
     return;
   }
 
@@ -500,7 +507,8 @@ static bool gatt_svc_read_cl_supp_feat_req(uint16_t conn_id,
 
   tGATT_STATUS status = GATTC_Read(conn_id, GATT_READ_BY_TYPE, &param);
   if (status != GATT_SUCCESS) {
-    LOG(ERROR) << __func__ << " Read failed. Status: " << loghex(status);
+    LOG(ERROR) << __func__ << " Read failed. Status: "
+               << loghex(static_cast<uint8_t>(status));
     return false;
   }
 
@@ -520,7 +528,8 @@ static bool gatt_att_write_cl_supp_feat(uint16_t conn_id, uint16_t handle) {
 
   tGATT_STATUS status = GATTC_Write(conn_id, GATT_WRITE, &attr);
   if (status != GATT_SUCCESS) {
-    LOG(ERROR) << __func__ << " Write failed. Status: " << loghex(status);
+    LOG(ERROR) << __func__ << " Write failed. Status: "
+               << loghex(static_cast<uint8_t>(status));
     return false;
   }
 
@@ -541,8 +550,8 @@ static void gatt_cl_op_cmpl_cback(uint16_t conn_id, tGATTC_OPTYPE op,
                                   tGATT_CL_COMPLETE* p_data) {
   auto iter = OngoingOps.find(conn_id);
 
-  VLOG(1) << __func__ << " opcode: " << loghex(op)
-          << " status: " << loghex(status) << " conn id: " << loghex(conn_id);
+  VLOG(1) << __func__ << " opcode: " << loghex(op) << " status: " << status
+          << " conn id: " << loghex(static_cast<uint8_t>(conn_id));
 
   if (op != GATTC_OPTYPE_READ) return;
 

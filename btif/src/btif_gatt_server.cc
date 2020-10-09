@@ -232,7 +232,7 @@ static void btapp_gatts_handle_cback(uint16_t event, char* p_param) {
     case BTA_GATTS_OPEN_EVT:
     case BTA_GATTS_CANCEL_OPEN_EVT:
     case BTA_GATTS_CLOSE_EVT:
-      LOG_DEBUG("%s: Empty event (%d)!", __func__, event);
+      LOG_INFO("%s: Empty event (%d)!", __func__, event);
       break;
 
     case BTA_GATTS_PHY_UPDATE_EVT:
@@ -344,7 +344,7 @@ static bt_status_t btif_gatts_close(int server_if, const RawAddress& bd_addr,
       Bind(&btif_gatts_close_impl, server_if, bd_addr, conn_id));
 }
 
-static void on_service_added_cb(uint8_t status, int server_if,
+static void on_service_added_cb(tGATT_STATUS status, int server_if,
                                 vector<btgatt_db_element_t> service) {
   HAL_CBACK(bt_gatt_callbacks, server->service_added_cb, status, server_if,
             std::move(service));
@@ -405,7 +405,8 @@ static void btif_gatts_send_response_impl(int conn_id, int trans_id, int status,
   tGATTS_RSP rsp_struct;
   btif_to_bta_response(&rsp_struct, &response);
 
-  BTA_GATTS_SendRsp(conn_id, trans_id, status, &rsp_struct);
+  BTA_GATTS_SendRsp(conn_id, trans_id, static_cast<tGATT_STATUS>(status),
+                    &rsp_struct);
 
   HAL_CBACK(bt_gatt_callbacks, server->response_confirmation_cb, 0,
             rsp_struct.attr_value.handle);
