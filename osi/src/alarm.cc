@@ -343,8 +343,13 @@ static bool lazy_initialize(void) {
     goto error;
   }
 
+#if !defined(__NuttX__)
   default_callback_thread =
       thread_new_sized("alarm_default_callbacks", SIZE_MAX);
+#else
+  default_callback_thread =
+      thread_new_sized2("alarm_default_callbacks", SIZE_MAX, CONFIG_FLUORIDE_ALARM_CALLBACK_STACKSIZE);
+#endif
   if (default_callback_thread == NULL) {
     LOG_ERROR("%s unable to create default alarm callbacks thread.", __func__);
     goto error;
@@ -359,7 +364,11 @@ static bool lazy_initialize(void) {
                                   default_callback_thread);
 
   dispatcher_thread_active = true;
+#if !defined(__NuttX__)
   dispatcher_thread = thread_new("alarm_dispatcher");
+#else
+  dispatcher_thread = thread_new2("alarm_dispatcher", CONFIG_FLUORIDE_ALARM_DISPATCHER_STACKSIZE);
+#endif
   if (!dispatcher_thread) {
     LOG_ERROR("%s unable to create alarm callback thread.", __func__);
     goto error;
@@ -670,9 +679,12 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
   LOG_INFO("%s Callback thread exited", __func__);
 }
 
+static bool dispatcher_thread_flag;
 static void *timer_dispatcher_thread(void *arg) {
 
-  while (1) {
+  prctl(PR_SET_NAME, "alarm_deprecated");
+
+  while (true) {
     sem_wait(&g_alarm_thread_sem);
     semaphore_post(alarm_expired);
   }
@@ -683,8 +695,10 @@ static void *timer_dispatcher_thread(void *arg) {
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   CHECK(timer != NULL);
 
+  pthread_t pid;
   struct sigevent sigevent;
   // create timer with RT priority thread
+  pthread_attr_t pattr;
   pthread_attr_t thread_attr;
   pthread_attr_init(&thread_attr);
   pthread_attr_setschedpolicy(&thread_attr, SCHED_FIFO);
@@ -712,8 +726,14 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
     return false;
   }
 
-  pthread_t pid;
-  pthread_create(&pid, NULL, timer_dispatcher_thread, NULL);
+  if (!dispatcher_thread_flag) {
+    dispatcher_thread_flag = true;
+    pthread_attr_init(&pattr);
+    pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE);
+    if (pthread_create(&pid, &pattr, timer_dispatcher_thread, NULL) < 0)
+      dispatcher_thread_flag = false;
+    pthread_attr_destroy(&pattr);
+  }
 
   return true;
 }

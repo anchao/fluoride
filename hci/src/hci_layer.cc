@@ -102,7 +102,11 @@ static const btsnoop_t* btsnoop;
 static const packet_fragmenter_t* packet_fragmenter;
 
 static future_t* startup_future;
+#if !defined(__NuttX__)
 static MessageLoopThread hci_thread("bt_hci_thread");
+#else
+static MessageLoopThread hci_thread("bt_hci_thread", CONFIG_FLUORIDE_HCI_STACKSIZE);
+#endif
 
 static alarm_t* startup_timer;
 

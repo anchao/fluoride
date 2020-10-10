@@ -43,7 +43,8 @@ class MessageLoopThread final {
    *
    * @param thread_name name of this worker thread
    */
-  explicit MessageLoopThread(const std::string& thread_name);
+  explicit MessageLoopThread(const std::string& thread_name,
+                              int stack_size = CONFIG_PTHREAD_STACK_DEFAULT);
 
   /**
    * Destroys the message loop thread automatically when it goes out of scope
@@ -145,8 +146,7 @@ class MessageLoopThread final {
    * @param start_up_promise a std::promise that is used to notify calling
    * thread the completion of message loop start-up
    */
-  static void RunThread(MessageLoopThread* context,
-                        std::promise<void> start_up_promise);
+  static void *RunThread(void *arg);
 
   /**
    * Post a task to run on this thread after a specified delay. If the task
@@ -185,16 +185,17 @@ class MessageLoopThread final {
    * @param start_up_promise a std::promise that is used to notify calling
    * thread the completion of message loop start-up
    */
-  void Run(std::promise<void> start_up_promise);
+  void Run(std::promise<void> *start_up_promise);
 
   mutable std::recursive_mutex api_mutex_;
   const std::string thread_name_;
   base::MessageLoop* message_loop_;
   base::RunLoop* run_loop_;
-  std::thread* thread_;
+  pthread_t thread_;
   base::PlatformThreadId thread_id_;
   // Linux specific abstractions
   pid_t linux_tid_;
+  int stack_size_;
   base::WeakPtrFactory<MessageLoopThread> weak_ptr_factory_;
   bool shutting_down_;
 

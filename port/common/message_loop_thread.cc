@@ -28,13 +28,19 @@ namespace common {
 
 static constexpr int kRealTimeFifoSchedulingPriority = PTHREAD_DEFAULT_PRIORITY;
 
-MessageLoopThread::MessageLoopThread(const std::string& thread_name)
+struct MessageLoopStart {
+  MessageLoopThread *thread;
+  std::promise<void> *promise;
+};
+
+MessageLoopThread::MessageLoopThread(const std::string& thread_name, int stack_size)
     : thread_name_(thread_name),
       message_loop_(nullptr),
       run_loop_(nullptr),
-      thread_(nullptr),
+      thread_(0),
       thread_id_(-1),
       linux_tid_(-1),
+      stack_size_(stack_size),
       weak_ptr_factory_(this),
       shutting_down_(false) {}
 
@@ -43,15 +49,29 @@ MessageLoopThread::~MessageLoopThread() { ShutDown(); }
 void MessageLoopThread::StartUp() {
   std::promise<void> start_up_promise;
   std::future<void> start_up_future = start_up_promise.get_future();
+  struct MessageLoopStart internal;
+  pthread_attr_t pattr;
+  pthread_t pid;
+  int ret;
   {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
-    if (thread_ != nullptr) {
+    if (thread_ != 0) {
       LOG(WARNING) << __func__ << ": thread " << *this << " is already started";
 
       return;
     }
-    thread_ = new std::thread(&MessageLoopThread::RunThread, this,
-                              std::move(start_up_promise));
+    internal.thread = this;
+    internal.promise = &start_up_promise;
+
+    pthread_attr_init(&pattr);
+    pthread_attr_setstacksize(&pattr, stack_size_);
+
+    ret = pthread_create(&pid, &pattr, MessageLoopThread::RunThread, &internal);
+    pthread_attr_destroy(&pattr);
+    if (ret < 0)
+      return;
+
+    thread_ = pid;
   }
   start_up_future.wait();
 }
@@ -83,7 +103,7 @@ bool MessageLoopThread::DoInThreadDelayed(const base::Location& from_here,
 void MessageLoopThread::ShutDown() {
   {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
-    if (thread_ == nullptr) {
+    if (thread_ == 0) {
       LOG(INFO) << __func__ << ": thread " << *this << " is already stopped";
       return;
     }
@@ -106,11 +126,10 @@ void MessageLoopThread::ShutDown() {
                  << *this;
     }
   }
-  thread_->join();
+  pthread_join(thread_, NULL);
   {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
-    delete thread_;
-    thread_ = nullptr;
+    thread_ = 0;
     shutting_down_ = false;
   }
 }
@@ -135,9 +154,10 @@ bool MessageLoopThread::IsRunning() const {
 }
 
 // Non API method, should not be protected by API mutex
-void MessageLoopThread::RunThread(MessageLoopThread* thread,
-                                  std::promise<void> start_up_promise) {
-  thread->Run(std::move(start_up_promise));
+void *MessageLoopThread::RunThread(void *arg) {
+  struct MessageLoopStart *internal = (struct MessageLoopStart *)arg;
+  internal->thread->Run(internal->promise);
+  return NULL;
 }
 
 base::MessageLoop* MessageLoopThread::message_loop() const {
@@ -169,7 +189,7 @@ base::WeakPtr<MessageLoopThread> MessageLoopThread::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
-void MessageLoopThread::Run(std::promise<void> start_up_promise) {
+void MessageLoopThread::Run(std::promise<void> *start_up_promise) {
   {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
     LOG(INFO) << __func__ << ": message loop starting for thread "
@@ -183,7 +203,7 @@ void MessageLoopThread::Run(std::promise<void> start_up_promise) {
 #else
     linux_tid_ = static_cast<pid_t>(gettid());
 #endif
-    start_up_promise.set_value();
+    start_up_promise->set_value();
   }
 
   // Blocking until ShutDown() is called

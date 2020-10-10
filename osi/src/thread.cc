@@ -64,11 +64,12 @@ static void work_queue_read_cb(void* context);
 
 static const size_t DEFAULT_WORK_QUEUE_CAPACITY = 128;
 
-thread_t* thread_new_sized(const char* name, size_t work_queue_capacity) {
+thread_t* thread_new_sized2(const char* name, size_t work_queue_capacity, int stack_size) {
   CHECK(name != NULL);
   CHECK(work_queue_capacity != 0);
 
   thread_t* ret = static_cast<thread_t*>(osi_calloc(sizeof(thread_t)));
+  pthread_attr_t pattr;
 
   ret->reactor = reactor_new();
   if (!ret->reactor) goto error;
@@ -84,7 +85,10 @@ thread_t* thread_new_sized(const char* name, size_t work_queue_capacity) {
   strncpy(ret->name, name, THREAD_NAME_MAX);
   start.thread = ret;
   start.error = 0;
-  pthread_create(&ret->pthread, NULL, run_thread, &start);
+  pthread_attr_init(&pattr);
+  pthread_attr_setstacksize(&pattr, stack_size);
+  pthread_create(&ret->pthread, &pattr, run_thread, &start);
+  pthread_attr_destroy(&pattr);
   semaphore_wait(start.start_sem);
   semaphore_free(start.start_sem);
 
@@ -99,6 +103,14 @@ error:;
   }
   osi_free(ret);
   return NULL;
+}
+
+thread_t* thread_new_sized(const char* name, size_t work_queue_capacity) {
+  return thread_new_sized2(name, work_queue_capacity, CONFIG_PTHREAD_STACK_DEFAULT);
+}
+
+thread_t* thread_new2(const char* name, int stack_size) {
+  return thread_new_sized2(name, DEFAULT_WORK_QUEUE_CAPACITY, stack_size);
 }
 
 thread_t* thread_new(const char* name) {
