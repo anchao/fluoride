@@ -56,7 +56,6 @@ CXXSRCS += $(wildcard btif/avrcp/*.cc)
 CXXSRCS += $(wildcard btif/co/*.cc)
 CXXSRCS += $(wildcard btif/src/*.cc)
 CXXSRCS += common/address_obfuscator.cc
-CXXSRCS += common/message_loop_thread.cc
 CXXSRCS += common/metric_id_allocator.cc
 CXXSRCS += common/metrics_linux.cc
 CXXSRCS += common/once_timer.cc
@@ -121,6 +120,7 @@ PORTCXXSRCS += port/audio_hal_interface/a2dp_encoding.cc
 PORTCXXSRCS += port/bta/hearing_aid/hearing_aid_audio_source.cc
 PORTCXXSRCS += port/btcore/src/module.cc
 PORTCXXSRCS += port/common/metrics.cc
+PORTCXXSRCS += port/common/message_loop_thread.cc
 PORTCXXSRCS += port/gd/common/init_flags.cc
 PORTCXXSRCS += port/hci/src/btsnoop_net.cc
 PORTCXXSRCS += port/osi/src/allocator.cc
@@ -176,6 +176,8 @@ ifeq ($(CONFIG_ARCH_SIM),y)
   FLRDFLAGS += -ffunction-sections -fdata-sections
 endif
 
+FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port}
+FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" .}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" bta/sys}
@@ -214,8 +216,6 @@ FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" packet/avrcp}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" vnd/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" audio_hal_interface}
 
-FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port}
-FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android/frameworks/base/core/proto}
 
@@ -276,7 +276,7 @@ CFLAGS   += $(FLRDFLAGS)
 ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
 
   PRIORITY  = SCHED_PRIORITY_DEFAULT
-  STACKSIZE = 20480
+  STACKSIZE = $(CONFIG_DEFAULT_TASK_STACKSIZE)
   MODULE    = $(CONFIG_FLUORIDE_EXAMPLES)
 
   ifneq ($(CONFIG_FLUORIDE_EXAMPLES_A2DP_SINK),)
