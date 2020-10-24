@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include "stack/include/bt_types.h"
+#include "stack/include/hci_error_code.h"
 #include "types/raw_address.h"
 
 namespace bluetooth {
@@ -25,26 +26,28 @@ namespace shim {
 namespace legacy {
 
 typedef struct {
-  void (*on_connected)(const RawAddress& bda, uint16_t handle, uint8_t status,
-                       uint8_t enc_mode);
-  void (*on_failed)(const RawAddress& bda, uint16_t handle, uint8_t status,
+  void (*on_connected)(const RawAddress& bda, uint16_t handle,
+                       tHCI_STATUS status, uint8_t enc_mode);
+  void (*on_failed)(const RawAddress& bda, uint16_t handle, tHCI_STATUS status,
                     uint8_t enc_mode);
-  void (*on_disconnected)(uint16_t handle, uint8_t reason);
+  void (*on_disconnected)(tHCI_STATUS status, uint16_t handle,
+                          tHCI_STATUS reason);
 } acl_classic_connection_interface_t;
 
 typedef struct {
   void (*on_connected)(const tBLE_BD_ADDR& address_with_type, uint16_t handle,
-                       uint8_t role, bool match, uint16_t conn_interval,
+                       uint8_t role, uint16_t conn_interval,
                        uint16_t conn_latency, uint16_t conn_timeout,
                        const RawAddress& local_rpa, const RawAddress& peer_rpa,
                        uint8_t peer_addr_type);
   void (*on_failed)(const tBLE_BD_ADDR& address_with_type, uint16_t handle,
-                    bool enhanced, uint8_t status);
-  void (*on_disconnected)(uint16_t handle, uint8_t reason);
+                    bool enhanced, tHCI_STATUS status);
+  void (*on_disconnected)(tHCI_STATUS status, uint16_t handle,
+                          tHCI_STATUS reason);
 } acl_le_connection_interface_t;
 
 typedef struct {
-  void (*on_authentication_complete)();
+  void (*on_authentication_complete)(uint16_t handle, tHCI_STATUS status);
   void (*on_change_connection_link_key_complete)();
   void (*on_encryption_change)(bool enabled);
   void (*on_flow_specification_complete)(uint16_t flow_direction,
@@ -54,7 +57,7 @@ typedef struct {
                                          uint32_t peak_bandwidth,
                                          uint32_t access_latency);
   void (*on_flush_occurred)();
-  void (*on_master_link_key_complete)(uint8_t key_flag);
+  void (*on_central_link_key_complete)(uint8_t key_flag);
   void (*on_mode_change)(uint16_t current_mode, uint16_t interval);
   void (*on_packet_type_changed)(uint16_t packet_type);
   void (*on_qos_setup_complete)(uint16_t service_type, uint32_t token_rate,
@@ -71,13 +74,19 @@ typedef struct {
   void (*on_read_link_quality_complete)(uint8_t link_quality);
   void (*on_read_link_supervision_timeout_complete)(
       uint16_t link_supervision_timeout);
+  void (*on_read_remote_extended_features_complete)(uint16_t handle,
+                                                    uint8_t current_page_number,
+                                                    uint8_t max_page_number,
+                                                    uint64_t features);
+  void (*on_read_remote_version_information_complete)(
+      tHCI_STATUS status, uint16_t handle, uint8_t lmp_version,
+      uint16_t manufacturer_name, uint16_t sub_version);
   void (*on_read_rssi_complete)(uint8_t rssi);
-  void (*on_read_remote_version_information_complete)();
   void (*on_read_transmit_power_level_complete)(uint8_t transmit_power_level);
-  void (*on_role_change)(uint8_t new_role);
+  void (*on_role_change)(tHCI_STATUS status, const RawAddress& bd_addr,
+                         uint8_t new_role);
   void (*on_role_discovery_complete)(uint8_t current_role);
 } acl_classic_link_interface_t;
-;
 
 typedef struct {
   void (*on_connection_update)(uint16_t connection_interval,
@@ -99,6 +108,7 @@ typedef struct {
 
 typedef struct {
   void (*on_send_data_upwards)(BT_HDR*);
+  void (*on_packets_completed)(uint16_t handle, uint16_t num_packets);
   acl_connection_interface_t connection;
   acl_link_interface_t link;
 } acl_interface_t;

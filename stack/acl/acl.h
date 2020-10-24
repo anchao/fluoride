@@ -48,7 +48,7 @@ enum btm_acl_swkey_state_t {
 typedef struct {
   RawAddress remote_bd_addr; /* Remote BD addr involved with the switch */
   uint8_t hci_status;        /* HCI status returned with the event */
-  uint8_t role;              /* HCI_ROLE_MASTER or HCI_ROLE_SLAVE */
+  uint8_t role;              /* HCI_ROLE_CENTRAL or HCI_ROLE_PERIPHERAL */
 } tBTM_ROLE_SWITCH_CMPL;
 
 typedef struct {
@@ -192,15 +192,13 @@ typedef struct {
   friend uint16_t BTM_GetNumAclLinks(void);
   friend uint16_t acl_get_link_supervision_timeout();
   friend uint16_t acl_get_supported_packet_types();
-  friend uint16_t btm_get_acl_disc_reason_code(void);
-  friend uint8_t acl_get_disconnect_reason();
   friend uint8_t btm_handle_to_acl_index(uint16_t hci_handle);
   friend void BTM_SetDefaultLinkSuperTout(uint16_t timeout);
   friend void BTM_acl_after_controller_started();
   friend void BTM_default_block_role_switch();
   friend void BTM_default_unblock_role_switch();
   friend void acl_initialize_power_mode(const tACL_CONN& p_acl);
-  friend void acl_set_disconnect_reason(uint8_t acl_disc_reason);
+  friend void acl_set_disconnect_reason(tHCI_STATUS acl_disc_reason);
   friend void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
                               uint8_t link_role, tBT_TRANSPORT transport);
   friend void btm_acl_device_down(void);
@@ -208,7 +206,7 @@ typedef struct {
                                      uint8_t encr_enable);
   friend void btm_acl_init(void);
   friend void btm_acl_process_sca_cmpl_pkt(uint8_t evt_len, uint8_t* p);
-  friend void btm_acl_role_changed(uint8_t hci_status,
+  friend void btm_acl_role_changed(tHCI_STATUS hci_status,
                                    const RawAddress& bd_addr, uint8_t new_role);
   friend void btm_acl_update_conn_addr(uint16_t conn_handle,
                                        const RawAddress& address);
@@ -241,6 +239,10 @@ typedef struct {
   uint16_t btm_acl_pkt_types_supported;
   uint16_t btm_def_link_policy;
   uint16_t btm_def_link_super_tout;
-  uint8_t acl_disc_reason;
+  tHCI_STATUS acl_disc_reason;
   uint8_t pm_pend_link;
+
+ public:
+  tHCI_STATUS get_disconnect_reason() const { return acl_disc_reason; }
+  void set_disconnect_reason(tHCI_STATUS reason) { acl_disc_reason = reason; }
 } tACL_CB;

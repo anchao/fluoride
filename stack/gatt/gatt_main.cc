@@ -31,13 +31,16 @@
 #include "btm_int.h"
 #include "connection_manager.h"
 #include "device/include/interop.h"
+#include "eatt.h"
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "osi/include/osi.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
+#include "stack/include/l2cap_acl_interface.h"
 
 using base::StringPrintf;
+using bluetooth::eatt::EattExtension;
 
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -124,6 +127,8 @@ void gatt_init(void) {
   gatt_cb.hdl_list_info = new std::list<tGATT_HDL_LIST_ELEM>();
   gatt_cb.srv_list_info = new std::list<tGATT_SRV_LIST_ELEM>();
   gatt_profile_db_init();
+
+  EattExtension::GetInstance()->Start();
 }
 
 /*******************************************************************************
@@ -157,12 +162,17 @@ void gatt_free(void) {
 
     fixed_queue_free(gatt_cb.tcb[i].sr_cmd.multi_rsp_q, NULL);
     gatt_cb.tcb[i].sr_cmd.multi_rsp_q = NULL;
+
+    if (gatt_cb.tcb[i].eatt)
+      EattExtension::GetInstance()->FreeGattResources(gatt_cb.tcb[i].peer_bda);
   }
 
   gatt_cb.hdl_list_info->clear();
   gatt_cb.hdl_list_info = nullptr;
   gatt_cb.srv_list_info->clear();
   gatt_cb.srv_list_info = nullptr;
+
+  EattExtension::GetInstance()->Stop();
 }
 
 /*******************************************************************************
@@ -195,7 +205,7 @@ bool gatt_connect(const RawAddress& rem_bda, tGATT_TCB* p_tcb,
   }
 
   p_tcb->att_lcid = L2CAP_ATT_CID;
-  return connection_manager::direct_connect_add(gatt_if, rem_bda);
+  return acl_create_le_connection_with_id(gatt_if, rem_bda);
 }
 
 /*******************************************************************************
@@ -320,6 +330,10 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb,
     if (p_tcb->app_hold_link.empty()) {
       // acl link is connected but no application needs to use the link
       if (p_tcb->att_lcid == L2CAP_ATT_CID && is_valid_handle) {
+
+        /* Drop EATT before closing ATT */
+        EattExtension::GetInstance()->Disconnect(p_tcb->peer_bda);
+
         /* for fixed channel, set the timeout value to
            GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP seconds */
         VLOG(1) << " start link idle timer = "
@@ -439,6 +453,8 @@ static void gatt_le_connect_cback(uint16_t chan, const RawAddress& bd_addr,
       gatt_chk_srv_chg(p_srv_chg_clt);
     }
   }
+
+  EattExtension::GetInstance()->Connect(bd_addr);
 }
 
 /** This function is called to process the congestion callback from lcb */

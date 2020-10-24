@@ -73,9 +73,9 @@ class LinkLayerController {
   ErrorCode AuthenticationRequested(uint16_t handle);
 
   ErrorCode AcceptConnectionRequest(const Address& addr, bool try_role_switch);
-  void MakeSlaveConnection(const Address& addr, bool try_role_switch);
+  void MakePeripheralConnection(const Address& addr, bool try_role_switch);
   ErrorCode RejectConnectionRequest(const Address& addr, uint8_t reason);
-  void RejectSlaveConnection(const Address& addr, uint8_t reason);
+  void RejectPeripheralConnection(const Address& addr, uint8_t reason);
   ErrorCode CreateConnection(const Address& addr, uint16_t packet_type,
                              uint8_t page_scan_mode, uint16_t clock_offset,
                              uint8_t allow_role_switch);
@@ -293,7 +293,7 @@ class LinkLayerController {
 
   ErrorCode ChangeConnectionPacketType(uint16_t handle, uint16_t types);
   ErrorCode ChangeConnectionLinkKey(uint16_t handle);
-  ErrorCode MasterLinkKey(uint8_t key_flag);
+  ErrorCode CentralLinkKey(uint8_t key_flag);
   ErrorCode HoldMode(uint16_t handle, uint16_t hold_mode_max_interval,
                      uint16_t hold_mode_min_interval);
   ErrorCode SniffMode(uint16_t handle, uint16_t sniff_max_interval,

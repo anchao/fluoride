@@ -394,7 +394,7 @@ void btu_hcif_process_event(UNUSED_ATTR uint8_t controller_id, BT_HDR* p_msg) {
         case HCI_BLE_READ_REMOTE_FEAT_CMPL_EVT:
           btm_ble_read_remote_features_complete(p);
           break;
-        case HCI_BLE_LTK_REQ_EVT: /* received only at slave device */
+        case HCI_BLE_LTK_REQ_EVT: /* received only at peripheral device */
           btu_ble_proc_ltk_req(p);
           break;
         case HCI_BLE_ENHANCED_CONN_COMPLETE_EVT:
@@ -542,8 +542,8 @@ static void btu_hcif_log_command_metrics(uint16_t opcode, uint8_t* p_cmd,
       }
       if (initiator_filter_policy == 0x00 ||
           (cmd_status != HCI_SUCCESS && !is_cmd_status)) {
-        // Selectively log to avoid log spam due to whitelist connections:
-        // - When doing non-whitelist connection
+        // Selectively log to avoid log spam due to acceptlist connections:
+        // - When doing non-acceptlist connection
         // - When there is an error in command status
         bluetooth::common::LogLinkLayerConnectionEvent(
             bd_addr_p, bluetooth::common::kUnknownConnectionHandle,
@@ -570,8 +570,8 @@ static void btu_hcif_log_command_metrics(uint16_t opcode, uint8_t* p_cmd,
       }
       if (initiator_filter_policy == 0x00 ||
           (cmd_status != HCI_SUCCESS && !is_cmd_status)) {
-        // Selectively log to avoid log spam due to whitelist connections:
-        // - When doing non-whitelist connection
+        // Selectively log to avoid log spam due to acceptlist connections:
+        // - When doing non-acceptlist connection
         // - When there is an error in command status
         bluetooth::common::LogLinkLayerConnectionEvent(
             bd_addr_p, bluetooth::common::kUnknownConnectionHandle,
@@ -584,7 +584,7 @@ static void btu_hcif_log_command_metrics(uint16_t opcode, uint8_t* p_cmd,
     }
     case HCI_BLE_CREATE_CONN_CANCEL:
       if (cmd_status != HCI_SUCCESS && !is_cmd_status) {
-        // Only log errors to prevent log spam due to whitelist connections
+        // Only log errors to prevent log spam due to acceptlist connections
         bluetooth::common::LogLinkLayerConnectionEvent(
             nullptr, bluetooth::common::kUnknownConnectionHandle,
             android::bluetooth::DIRECTION_OUTGOING,
@@ -593,15 +593,15 @@ static void btu_hcif_log_command_metrics(uint16_t opcode, uint8_t* p_cmd,
             android::bluetooth::hci::STATUS_UNKNOWN);
       }
       break;
-    case HCI_BLE_CLEAR_WHITE_LIST:
+    case HCI_BLE_CLEAR_ACCEPTLIST:
       bluetooth::common::LogLinkLayerConnectionEvent(
           nullptr, bluetooth::common::kUnknownConnectionHandle,
           android::bluetooth::DIRECTION_INCOMING,
           android::bluetooth::LINK_TYPE_ACL, opcode, hci_event, kUnknownBleEvt,
           cmd_status, android::bluetooth::hci::STATUS_UNKNOWN);
       break;
-    case HCI_BLE_ADD_WHITE_LIST:
-    case HCI_BLE_REMOVE_WHITE_LIST: {
+    case HCI_BLE_ADD_ACCEPTLIST:
+    case HCI_BLE_REMOVE_ACCEPTLIST: {
       uint8_t peer_addr_type;
       STREAM_TO_UINT8(peer_addr_type, p_cmd);
       STREAM_TO_BDADDR(bd_addr, p_cmd);
@@ -757,9 +757,9 @@ static void btu_hcif_log_command_complete_metrics(uint16_t opcode,
   uint16_t hci_ble_event = android::bluetooth::hci::BLE_EVT_UNKNOWN;
   RawAddress bd_addr = RawAddress::kEmpty;
   switch (opcode) {
-    case HCI_BLE_CLEAR_WHITE_LIST:
-    case HCI_BLE_ADD_WHITE_LIST:
-    case HCI_BLE_REMOVE_WHITE_LIST: {
+    case HCI_BLE_CLEAR_ACCEPTLIST:
+    case HCI_BLE_ADD_ACCEPTLIST:
+    case HCI_BLE_REMOVE_ACCEPTLIST: {
       STREAM_TO_UINT8(status, p_return_params);
       bluetooth::common::LogLinkLayerConnectionEvent(
           nullptr, bluetooth::common::kUnknownConnectionHandle,
@@ -961,7 +961,7 @@ static void btu_hcif_connection_comp_evt(uint8_t* p, uint8_t evt_len) {
   }
 
   if (link_type == HCI_LINK_TYPE_ACL) {
-    btm_acl_connected(bda, handle, status, enc_mode);
+    btm_acl_connected(bda, handle, static_cast<tHCI_STATUS>(status), enc_mode);
   } else {
     memset(&esco_data, 0, sizeof(tBTM_ESCO_DATA));
     /* esco_data.link_type = HCI_LINK_TYPE_SCO; already zero */
@@ -1015,13 +1015,6 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
 
   handle = HCID_GET_HANDLE(handle);
 
-  if ((reason != HCI_ERR_CONN_CAUSE_LOCAL_HOST) &&
-      (reason != HCI_ERR_PEER_USER)) {
-    /* Uncommon disconnection reasons */
-    HCI_TRACE_DEBUG("%s: Got Disconn Complete Event: reason=%d, handle=%d",
-                    __func__, reason, handle);
-  }
-
   /* If L2CAP or SCO doesn't know about it, send it to ISO */
   if (!l2c_link_hci_disc_comp(handle, reason) &&
       !btm_sco_removed(handle, reason)) {
@@ -1029,7 +1022,7 @@ static void btu_hcif_disconnection_comp_evt(uint8_t* p) {
   }
 
   /* Notify security manager */
-  btm_sec_disconnected(handle, reason);
+  btm_sec_disconnected(handle, static_cast<tHCI_STATUS>(reason));
 }
 
 /*******************************************************************************
@@ -1048,7 +1041,7 @@ static void btu_hcif_authentication_comp_evt(uint8_t* p) {
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
 
-  btm_sec_auth_complete(handle, status);
+  btm_sec_auth_complete(handle, static_cast<tHCI_STATUS>(status));
 }
 
 /*******************************************************************************
@@ -1401,20 +1394,23 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status,
       if (status != HCI_SUCCESS) {
         // Tell BTM that the command failed
         STREAM_TO_BDADDR(bd_addr, p_cmd);
-        btm_acl_role_changed(status, bd_addr, HCI_ROLE_UNKNOWN);
+        btm_acl_role_changed(static_cast<tHCI_STATUS>(status), bd_addr,
+                             HCI_ROLE_UNKNOWN);
       }
       break;
     case HCI_CREATE_CONNECTION:
       if (status != HCI_SUCCESS) {
         STREAM_TO_BDADDR(bd_addr, p_cmd);
-        btm_acl_connected(bd_addr, HCI_INVALID_HANDLE, status, 0);
+        btm_acl_connected(bd_addr, HCI_INVALID_HANDLE,
+                          static_cast<tHCI_STATUS>(status), 0);
       }
       break;
     case HCI_AUTHENTICATION_REQUESTED:
       if (status != HCI_SUCCESS) {
         // Device refused to start authentication
         // This is treated as an authentication failure
-        btm_sec_auth_complete(HCI_INVALID_HANDLE, status);
+        btm_sec_auth_complete(HCI_INVALID_HANDLE,
+                              static_cast<tHCI_STATUS>(status));
       }
       break;
     case HCI_SET_CONN_ENCRYPTION:
@@ -1558,7 +1554,7 @@ static void btu_hcif_role_change_evt(uint8_t* p) {
   STREAM_TO_UINT8(role, p);
 
   btm_blacklist_role_change_device(bda, status);
-  btm_acl_role_changed(status, bda, role);
+  btm_acl_role_changed(static_cast<tHCI_STATUS>(status), bda, role);
 }
 
 /*******************************************************************************
@@ -1711,7 +1707,7 @@ extern void gatt_notify_conn_update(uint16_t handle, uint16_t interval,
                                     tGATT_STATUS status);
 
 static void btu_ble_ll_conn_param_upd_evt(uint8_t* p, uint16_t evt_len) {
-  /* LE connection update has completed successfully as a master. */
+  /* LE connection update has completed successfully as a central. */
   /* We can enable the update request if the result is a success. */
   /* extract the HCI handle first */
   uint8_t status;

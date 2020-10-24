@@ -22,14 +22,18 @@
  *
  ******************************************************************************/
 
+#define LOG_TAG "bluetooth"
+
 #include <string.h>
 
 #include "bt_common.h"
 #include "bt_target.h"
 #include "bt_utils.h"
+#include "eatt.h"
 #include "gatt_int.h"
 #include "l2c_api.h"
 #include "log/log.h"
+#include "osi/include/log.h"
 #include "osi/include/osi.h"
 
 #define GATT_WRITE_LONG_HDR_SIZE 5 /* 1 opcode + 2 handle + 2 offset */
@@ -45,6 +49,8 @@
 
 using base::StringPrintf;
 using bluetooth::Uuid;
+using bluetooth::eatt::EattExtension;
+using bluetooth::eatt::EattChannel;
 
 /*******************************************************************************
  *                      G L O B A L      G A T T       D A T A                 *
@@ -82,7 +88,7 @@ void gatt_act_discovery(tGATT_CLCB* p_clcb) {
   uint8_t op_code = disc_type_to_att_opcode[p_clcb->op_subtype];
 
   if (p_clcb->s_handle > p_clcb->e_handle || p_clcb->s_handle == 0) {
-    /* end of handle range */
+    LOG_DEBUG("Completed GATT discovery of all handle ranges");
     gatt_end_operation(p_clcb, GATT_SUCCESS, NULL);
     return;
   }
@@ -123,6 +129,7 @@ void gatt_act_discovery(tGATT_CLCB* p_clcb) {
 
   tGATT_STATUS st = attp_send_cl_msg(*p_clcb->p_tcb, p_clcb, op_code, &cl_req);
   if (st != GATT_SUCCESS && st != GATT_CMD_STARTED) {
+    LOG_WARN("Unable to send ATT message");
     gatt_end_operation(p_clcb, GATT_ERROR, NULL);
   }
 }
@@ -1049,9 +1056,14 @@ uint8_t gatt_cmd_to_rsp_code(uint8_t cmd_code) {
 bool gatt_cl_send_next_cmd_inq(tGATT_TCB& tcb) {
   std::queue<tGATT_CMD_Q>* cl_cmd_q;
 
-  while (!tcb.cl_cmd_q.empty()) {
+  while (!tcb.cl_cmd_q.empty() ||
+         EattExtension::GetInstance()->IsOutstandingMsgInSendQueue(tcb.peer_bda)) {
     if (!tcb.cl_cmd_q.empty()) {
       cl_cmd_q = &tcb.cl_cmd_q;
+    } else {
+      EattChannel* channel =
+          EattExtension::GetInstance()->GetChannelWithQueuedData(tcb.peer_bda);
+      cl_cmd_q = &channel->cl_cmd_q_;
     }
 
     tGATT_CMD_Q& cmd = cl_cmd_q->front();

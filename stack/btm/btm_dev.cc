@@ -133,13 +133,6 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
     }
   }
 
-#if (BTIF_MIXED_MODE_INCLUDED == TRUE)
-  if (key_type < BTM_MAX_PRE_SM4_LKEY_TYPE)
-    p_dev_rec->sm4 = BTM_SM4_KNOWN;
-  else
-    p_dev_rec->sm4 = BTM_SM4_TRUE;
-#endif
-
   p_dev_rec->rmt_io_caps = BTM_IO_CAP_OUT;
   p_dev_rec->device_type |= BT_DEVICE_TYPE_BREDR;
 
@@ -290,7 +283,7 @@ bool btm_dev_support_role_switch(const RawAddress& bd_addr) {
     return false;
   }
 
-  if (!controller_get_interface()->supports_master_slave_role_switch()) {
+  if (!controller_get_interface()->supports_central_peripheral_role_switch()) {
     BTM_TRACE_DEBUG("%s Local controller does not support role switch",
                     __func__);
     return false;

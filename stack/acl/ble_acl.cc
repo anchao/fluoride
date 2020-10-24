@@ -35,7 +35,7 @@ static bool acl_ble_common_connection(const tBLE_BD_ADDR& address_with_type,
                                       uint16_t conn_interval,
                                       uint16_t conn_latency,
                                       uint16_t conn_timeout) {
-  if (role == HCI_ROLE_MASTER) {
+  if (role == HCI_ROLE_CENTRAL) {
     btm_cb.ble_ctr_cb.set_connection_state_idle();
     btm_ble_clear_topology_mask(BTM_BLE_STATE_INIT_BIT);
   }
@@ -79,7 +79,7 @@ void acl_ble_connection_complete(const tBLE_BD_ADDR& address_with_type,
 
   btm_ble_update_mode_operation(role, &address_with_type.bda, HCI_SUCCESS);
 
-  if (role == HCI_ROLE_SLAVE)
+  if (role == HCI_ROLE_PERIPHERAL)
     btm_ble_advertiser_notify_terminated_legacy(HCI_SUCCESS, handle);
 }
 
@@ -102,12 +102,29 @@ void acl_ble_enhanced_connection_complete(
         address_with_type.bda, peer_rpa, tBTM_SEC_BLE::BTM_BLE_ADDR_RRA);
   btm_ble_update_mode_operation(role, &address_with_type.bda, HCI_SUCCESS);
 
-  if (role == HCI_ROLE_SLAVE)
+  if (role == HCI_ROLE_PERIPHERAL)
     btm_ble_advertiser_notify_terminated_legacy(HCI_SUCCESS, handle);
 }
 
+void acl_ble_enhanced_connection_complete_from_shim(
+    const tBLE_BD_ADDR& address_with_type, uint16_t handle, uint8_t role,
+    uint16_t conn_interval, uint16_t conn_latency, uint16_t conn_timeout,
+    const RawAddress& local_rpa, const RawAddress& peer_rpa,
+    uint8_t peer_addr_type) {
+  bool match = false;  // TODO look up in database
+  acl_ble_enhanced_connection_complete(
+      address_with_type, handle, role, match, conn_interval, conn_latency,
+      conn_timeout, local_rpa, peer_rpa, peer_addr_type);
+
+  // The legacy stack continues the LE connection after the read remote version
+  // complete has been received.
+  l2cble_notify_le_connection(address_with_type.bda);
+  l2cble_use_preferred_conn_params(address_with_type.bda);
+}
+
 void acl_ble_connection_fail(const tBLE_BD_ADDR& address_with_type,
-                             uint16_t handle, bool enhanced, uint8_t status) {
+                             uint16_t handle, bool enhanced,
+                             tHCI_STATUS status) {
   if (status != HCI_ERR_ADVERTISING_TIMEOUT) {
     btm_cb.ble_ctr_cb.set_connection_state_idle();
     btm_ble_clear_topology_mask(BTM_BLE_STATE_INIT_BIT);

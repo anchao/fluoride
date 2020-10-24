@@ -47,14 +47,13 @@
  *                  for a LE device stored in the NVRAM.
  *
  * Parameters:      bd_addr          - BD address of the peer
- *                  bd_name          - Name of the peer device. NULL if unknown.
  *                  dev_type         - Remote device's device type.
  *                  addr_type        - LE device address type.
  *
  * Returns          true if added OK, else false
  *
  ******************************************************************************/
-extern bool BTM_SecAddBleDevice(const RawAddress& bd_addr, BD_NAME bd_name,
+extern bool BTM_SecAddBleDevice(const RawAddress& bd_addr,
                                 tBT_DEVICE_TYPE dev_type,
                                 tBLE_ADDR_TYPE addr_type);
 
@@ -336,7 +335,7 @@ extern void BTM_BleLoadLocalKeys(uint8_t key_type, tBTM_BLE_LOCAL_KEYS* p_key);
  * Parameters:      bd_addr          - BD address of the peripheral
  *                  min_conn_int     - minimum preferred connection interval
  *                  max_conn_int     - maximum preferred connection interval
- *                  slave_latency    - preferred slave latency
+ *                  peripheral_latency    - preferred peripheral latency
  *                  supervision_tout - preferred supervision timeout
  *
  * Returns          void
@@ -345,7 +344,7 @@ extern void BTM_BleLoadLocalKeys(uint8_t key_type, tBTM_BLE_LOCAL_KEYS* p_key);
 extern void BTM_BleSetPrefConnParams(const RawAddress& bd_addr,
                                      uint16_t min_conn_int,
                                      uint16_t max_conn_int,
-                                     uint16_t slave_latency,
+                                     uint16_t peripheral_latency,
                                      uint16_t supervision_tout);
 
 /******************************************************************************

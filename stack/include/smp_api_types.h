@@ -28,7 +28,7 @@
 #define SMP_OPCODE_RAND 0x04
 #define SMP_OPCODE_PAIRING_FAILED 0x05
 #define SMP_OPCODE_ENCRYPT_INFO 0x06
-#define SMP_OPCODE_MASTER_ID 0x07
+#define SMP_OPCODE_CENTRAL_ID 0x07
 #define SMP_OPCODE_IDENTITY_INFO 0x08
 #define SMP_OPCODE_ID_ADDR 0x09
 #define SMP_OPCODE_SIGN_INFO 0x0A
@@ -56,6 +56,7 @@
 /* SC OOB local data set is created (as result of SMP_CrLocScOobData(...)) */
 #define SMP_SC_LOC_OOB_DATA_UP_EVT 10
 #define SMP_BR_KEYS_REQ_EVT 12 /* SMP over BR keys request event */
+#define SMP_CONSENT_REQ_EVT 14 /* Consent request event */
 typedef uint8_t tSMP_EVT;
 
 /* pairing failure reason code */
@@ -145,7 +146,7 @@ typedef uint8_t tSMP_SEC_LEVEL;
 /* SMP key types */
 #define SMP_SEC_KEY_TYPE_ENC (1 << 0)  /* encryption key */
 #define SMP_SEC_KEY_TYPE_ID (1 << 1)   /* identity key */
-#define SMP_SEC_KEY_TYPE_CSRK (1 << 2) /* slave CSRK */
+#define SMP_SEC_KEY_TYPE_CSRK (1 << 2) /* peripheral CSRK */
 #define SMP_SEC_KEY_TYPE_LK (1 << 3)   /* BR/EDR link key */
 typedef uint8_t tSMP_KEYS;
 

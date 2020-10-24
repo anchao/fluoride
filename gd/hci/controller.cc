@@ -35,8 +35,10 @@ struct Controller::impl {
   void Start(hci::HciLayer* hci) {
     hci_ = hci;
     Handler* handler = module_.GetHandler();
-    hci_->RegisterEventHandler(
-        EventCode::NUMBER_OF_COMPLETED_PACKETS, handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
+    if (common::InitFlags::GdAclEnabled() || common::InitFlags::GdL2capEnabled()) {
+      hci_->RegisterEventHandler(
+          EventCode::NUMBER_OF_COMPLETED_PACKETS, handler->BindOn(this, &Controller::impl::NumberOfCompletedPackets));
+    }
 
     le_set_event_mask(kDefaultLeEventMask);
     set_event_mask(kDefaultEventMask);
@@ -532,7 +534,7 @@ struct Controller::impl {
       OP_CODE_MAPPING(AUTHENTICATION_REQUESTED)
       OP_CODE_MAPPING(SET_CONNECTION_ENCRYPTION)
       OP_CODE_MAPPING(CHANGE_CONNECTION_LINK_KEY)
-      OP_CODE_MAPPING(MASTER_LINK_KEY)
+      OP_CODE_MAPPING(CENTRAL_LINK_KEY)
       OP_CODE_MAPPING(REMOTE_NAME_REQUEST)
       OP_CODE_MAPPING(REMOTE_NAME_REQUEST_CANCEL)
       OP_CODE_MAPPING(READ_REMOTE_SUPPORTED_FEATURES)
@@ -906,8 +908,8 @@ LOCAL_LE_FEATURE_ACCESSOR(SupportsBleExtendedAdvertising, 12)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertising, 13)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertisingSyncTransferSender, 24)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBlePeriodicAdvertisingSyncTransferRecipient, 25)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamMaster, 28)
-LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamSlave, 29)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamCentral, 28)
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectedIsochronousStreamPeripheral, 29)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleIsochronousBroadcaster, 30)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleSynchronizedReceiver, 31)
 

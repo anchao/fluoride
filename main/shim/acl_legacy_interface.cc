@@ -26,21 +26,23 @@ namespace legacy {
 const acl_interface_t GetAclInterface() {
   acl_interface_t acl_interface{
       .on_send_data_upwards = acl_rcv_acl_data,
+      .on_packets_completed = acl_packets_completed,
 
       .connection.classic.on_connected = btm_acl_connected,
       .connection.classic.on_failed = btm_acl_connected,
-      .connection.classic.on_disconnected = btm_sec_disconnected,
+      .connection.classic.on_disconnected = btm_acl_disconnected,
 
-      .connection.le.on_connected = acl_ble_enhanced_connection_complete,
+      .connection.le.on_connected =
+          acl_ble_enhanced_connection_complete_from_shim,
       .connection.le.on_failed = acl_ble_connection_fail,
-      .connection.le.on_disconnected = btm_sec_disconnected,
+      .connection.le.on_disconnected = btm_acl_disconnected,
 
-      .link.classic.on_authentication_complete = nullptr,
+      .link.classic.on_authentication_complete = btm_sec_auth_complete,
       .link.classic.on_change_connection_link_key_complete = nullptr,
       .link.classic.on_encryption_change = nullptr,
       .link.classic.on_flow_specification_complete = nullptr,
       .link.classic.on_flush_occurred = nullptr,
-      .link.classic.on_master_link_key_complete = nullptr,
+      .link.classic.on_central_link_key_complete = nullptr,
       .link.classic.on_mode_change = nullptr,
       .link.classic.on_packet_type_changed = nullptr,
       .link.classic.on_qos_setup_complete = nullptr,
@@ -53,9 +55,11 @@ const acl_interface_t GetAclInterface() {
       .link.classic.on_read_link_quality_complete = nullptr,
       .link.classic.on_read_link_supervision_timeout_complete = nullptr,
       .link.classic.on_read_remote_version_information_complete = nullptr,
+      .link.classic.on_read_remote_extended_features_complete =
+          acl_process_extended_features,
       .link.classic.on_read_rssi_complete = nullptr,
       .link.classic.on_read_transmit_power_level_complete = nullptr,
-      .link.classic.on_role_change = nullptr,
+      .link.classic.on_role_change = btm_acl_role_changed,
       .link.classic.on_role_discovery_complete = nullptr,
 
       .link.le.on_connection_update = nullptr,

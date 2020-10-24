@@ -21,6 +21,7 @@
 #include "stack/include/acl_api_types.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_status.h"
+#include "stack/include/hci_error_code.h"
 #include "types/raw_address.h"
 
 // Note: From stack/include/btm_api.h
@@ -111,8 +112,8 @@ tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, uint8_t* p_role);
  *
  * Function         BTM_SwitchRole
  *
- * Description      This function is called to switch role between master and
- *                  slave.  If role is already set it will do nothing.
+ * Description      This function is called to switch role between central and
+ *                  peripheral.  If role is already set it will do nothing.
  *
  * Returns          BTM_SUCCESS if already in specified role.
  *                  BTM_CMD_STARTED if command issued to controller.
@@ -215,8 +216,8 @@ void btm_set_packet_types_from_address(const RawAddress& bda,
 
 bool lmp_version_below(const RawAddress& bda, uint8_t version);
 
-bool acl_br_edr_is_role_master(const RawAddress& bda);
-bool acl_ble_is_role_master(const RawAddress& bda);
+bool acl_br_edr_is_role_central(const RawAddress& bda);
+bool acl_ble_is_role_central(const RawAddress& bda);
 
 #define BLE_RESOLVE_ADDR_MASK 0xc0
 #define BLE_RESOLVE_ADDR_MSB 0x40
@@ -291,8 +292,8 @@ uint16_t acl_get_hci_handle_for_hcif(const RawAddress& bd_addr,
                                      tBT_TRANSPORT transport);
 
 uint16_t acl_get_link_supervision_timeout();
-uint8_t acl_get_disconnect_reason();
-void acl_set_disconnect_reason(uint8_t acl_disc_reason);
+tHCI_STATUS acl_get_disconnect_reason();
+void acl_set_disconnect_reason(tHCI_STATUS acl_disc_reason);
 
 bool acl_is_role_switch_allowed();
 
@@ -332,7 +333,7 @@ bool BTM_ReadPowerMode(const RawAddress& remote_bda, tBTM_PM_MODE* p_mode);
 void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
                      uint8_t link_role, tBT_TRANSPORT transport);
 
-void btm_acl_removed(const RawAddress& bda, tBT_TRANSPORT transport);
+void btm_acl_removed(uint16_t handle);
 
 void acl_disconnect(const RawAddress& bd_addr, tBT_TRANSPORT transport,
                     uint8_t reason);

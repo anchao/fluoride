@@ -28,6 +28,9 @@
       "name" : "net_test_device"
     },
     {
+      "name" : "net_test_eatt"
+    },
+    {
       "name" : "net_test_hci"
     },
     {
@@ -78,6 +81,10 @@
       "host" : true
     },
     {
+      "name" : "net_test_eatt",
+      "host" : true
+    },
+    {
       "name" : "net_test_types",
       "host" : true
     },
@@ -87,6 +94,10 @@
     },
     {
       "name" : "net_test_stack_gatt_native",
+      "host" : true
+    },
+    {
+      "name" : "net_test_stack_a2dp_native",
       "host" : true
     },
     {

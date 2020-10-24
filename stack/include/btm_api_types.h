@@ -334,8 +334,8 @@ typedef struct {
   uint8_t pcm_intf_rate; /* PCM interface rate: 0: 128kbps, 1: 256 kbps;
                              2:512 bps; 3: 1024kbps; 4: 2048kbps */
   uint8_t frame_type;    /* frame type: 0: short; 1: long */
-  uint8_t sync_mode;     /* sync mode: 0: slave; 1: master */
-  uint8_t clock_mode;    /* clock mode: 0: slave; 1: master */
+  uint8_t sync_mode;     /* sync mode: 0: peripheral; 1: central */
+  uint8_t clock_mode;    /* clock mode: 0: peripheral; 1: central */
 
 } tBTM_SCO_PCM_PARAM;
 
@@ -462,40 +462,40 @@ typedef void(tBTM_ESCO_CBACK)(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p_data);
  *  Security Manager Constants
  *******************************/
 
-/* Security Mode (BTM_SetSecurityMode) */
-#define BTM_SEC_MODE_SERVICE 2
-#define BTM_SEC_MODE_SP 4
-#define BTM_SEC_MODE_SC 6
+typedef enum : uint8_t {
+  BTM_SEC_MODE_SERVICE = 2,
+  BTM_SEC_MODE_SP = 4,
+  BTM_SEC_MODE_SC = 6,
+} tSECURITY_MODE;
 
-/* Security Service Levels [bit mask] (BTM_SetSecurityLevel)
- * Encryption should not be used without authentication
-*/
-/* Nothing required */
-#define BTM_SEC_NONE 0x0000
-/* Inbound call requires authentication */
-#define BTM_SEC_IN_AUTHENTICATE 0x0002
-/* Inbound call requires encryption */
-#define BTM_SEC_IN_ENCRYPT 0x0004
-/* Outbound call requires authentication */
-#define BTM_SEC_OUT_AUTHENTICATE 0x0010
-/* Outbound call requires encryption */
-#define BTM_SEC_OUT_ENCRYPT 0x0020
-/* Secure Connections Only Mode */
-#define BTM_SEC_MODE4_LEVEL4 0x0040
-/* Need to switch connection to be master */
-#define BTM_SEC_FORCE_MASTER 0x0100
-/* Try to switch connection to be master */
-#define BTM_SEC_ATTEMPT_MASTER 0x0200
-/* Need to switch connection to be master */
-#define BTM_SEC_FORCE_SLAVE 0x0400
-/* Try to switch connection to be slave */
-#define BTM_SEC_ATTEMPT_SLAVE 0x0800
-/* inbound Do man in the middle protection */
-#define BTM_SEC_IN_MITM 0x1000
-/* outbound Do man in the middle protection */
-#define BTM_SEC_OUT_MITM 0x2000
-/* enforce a minimum of 16 digit for sec mode 2 */
-#define BTM_SEC_IN_MIN_16_DIGIT_PIN 0x4000
+enum : uint16_t {
+  /* Nothing required */
+  BTM_SEC_NONE = 0x0000,
+  /* Inbound call requires authentication */
+  BTM_SEC_IN_AUTHENTICATE = 0x0002,
+  /* Inbound call requires encryption */
+  BTM_SEC_IN_ENCRYPT = 0x0004,
+  /* Outbound call requires authentication */
+  BTM_SEC_OUT_AUTHENTICATE = 0x0010,
+  /* Outbound call requires encryption */
+  BTM_SEC_OUT_ENCRYPT = 0x0020,
+  /* Secure Connections Only Mode */
+  BTM_SEC_MODE4_LEVEL4 = 0x0040,
+  /* Need to switch connection to be central */
+  BTM_SEC_FORCE_CENTRAL = 0x0100,
+  /* Need to switch connection to be central */
+  BTM_SEC_ATTEMPT_CENTRAL = 0x0200,
+  /* Need to switch connection to be slave */
+  BTM_SEC_FORCE_PERIPHERAL = 0x0400,
+  /* Try to switch connection to be slave */
+  BTM_SEC_ATTEMPT_PERIPHERAL = 0x0800,
+  /* inbound Do man in the middle protection */
+  BTM_SEC_IN_MITM = 0x1000,
+  /* outbound Do man in the middle protection */
+  BTM_SEC_OUT_MITM = 0x2000,
+  /* enforce a minimum of 16 digit for sec mode 2 */
+  BTM_SEC_IN_MIN_16_DIGIT_PIN = 0x4000,
+};
 
 /* Security Flags [bit mask] (BTM_GetSecurityFlags)
 */
@@ -530,49 +530,16 @@ typedef uint8_t tBTM_LINK_KEY_TYPE;
 #define BTM_SEC_PROTO_HID 6 /* HID      */
 #define BTM_SEC_PROTO_AVDT 7
 
-/* Security service definitions (BTM_SetSecurityLevel)
- * Used for Authorization APIs
-*/
-#define BTM_SEC_SERVICE_SDP_SERVER 0
-#define BTM_SEC_SERVICE_SERIAL_PORT 1
-#define BTM_SEC_SERVICE_LAN_ACCESS 2
-#define BTM_SEC_SERVICE_DUN 3
-#define BTM_SEC_SERVICE_IRMC_SYNC 4
-#define BTM_SEC_SERVICE_OBEX 6
-#define BTM_SEC_SERVICE_OBEX_FTP 7
 #define BTM_SEC_SERVICE_HEADSET 8
-#define BTM_SEC_SERVICE_CORDLESS 9
-#define BTM_SEC_SERVICE_INTERCOM 10
 #define BTM_SEC_SERVICE_HEADSET_AG 12
-#define BTM_SEC_SERVICE_BPP_JOB 22
-#define BTM_SEC_SERVICE_BNEP_PANU 25
-#define BTM_SEC_SERVICE_BNEP_GN 26
-#define BTM_SEC_SERVICE_BNEP_NAP 27
-#define BTM_SEC_SERVICE_HF_HANDSFREE 28
 #define BTM_SEC_SERVICE_AG_HANDSFREE 29
-
-#define BTM_SEC_SERVICE_HIDH_SEC_CTRL 32
-#define BTM_SEC_SERVICE_HIDH_NOSEC_CTRL 33
-#define BTM_SEC_SERVICE_HIDH_INTR 34
-#define BTM_SEC_SERVICE_BIP 35
-#define BTM_SEC_SERVICE_AVDTP 37
-#define BTM_SEC_SERVICE_AVDTP_NOSEC 38
-#define BTM_SEC_SERVICE_AVCTP 39
-#define BTM_SEC_SERVICE_SAP 40
-#define BTM_SEC_SERVICE_PBAP 41
 #define BTM_SEC_SERVICE_RFC_MUX 42
-#define BTM_SEC_SERVICE_AVCTP_BROWSE 43
-#define BTM_SEC_SERVICE_MAP 44
-#define BTM_SEC_SERVICE_HDP_SNK 48
-#define BTM_SEC_SERVICE_ATT 50
-#define BTM_SEC_SERVICE_HIDD_SEC_CTRL 51
-#define BTM_SEC_SERVICE_HIDD_NOSEC_CTRL 52
-#define BTM_SEC_SERVICE_HIDD_INTR 53
 #define BTM_SEC_SERVICE_HEARING_AID_LEFT 54
 #define BTM_SEC_SERVICE_HEARING_AID_RIGHT 55
+#define BTM_SEC_SERVICE_EATT 56
 
 /* Update these as services are added */
-#define BTM_SEC_SERVICE_FIRST_EMPTY 56
+#define BTM_SEC_SERVICE_FIRST_EMPTY 57
 
 #ifndef BTM_SEC_MAX_SERVICES
 #define BTM_SEC_MAX_SERVICES 75
@@ -815,6 +782,7 @@ typedef void(tBTM_BOND_CANCEL_CMPL_CALLBACK)(tBTM_STATUS result);
 #define BTM_LE_LAST_FROM_SMP BTM_LE_BR_KEYS_REQ_EVT
 /* KEY update event */
 #define BTM_LE_KEY_EVT (BTM_LE_LAST_FROM_SMP + 1)
+#define BTM_LE_CONSENT_REQ_EVT SMP_CONSENT_REQ_EVT
 typedef uint8_t tBTM_LE_EVT;
 
 #define BTM_LE_KEY_NONE 0
@@ -826,9 +794,9 @@ typedef uint8_t tBTM_LE_EVT;
 #define BTM_LE_KEY_PCSRK SMP_SEC_KEY_TYPE_CSRK
 #define BTM_LE_KEY_PLK SMP_SEC_KEY_TYPE_LK
 #define BTM_LE_KEY_LLK (SMP_SEC_KEY_TYPE_LK << 4)
-/* master role security information:div */
+/* central role security information:div */
 #define BTM_LE_KEY_LENC (SMP_SEC_KEY_TYPE_ENC << 4)
-/* master device ID key */
+/* central device ID key */
 #define BTM_LE_KEY_LID (SMP_SEC_KEY_TYPE_ID << 4)
 /* local CSRK has been deliver to peer */
 #define BTM_LE_KEY_LCSRK (SMP_SEC_KEY_TYPE_CSRK << 4)

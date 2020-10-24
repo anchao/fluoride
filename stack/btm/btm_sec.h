@@ -25,6 +25,7 @@
 #include <cstdint>
 #include "stack/btm/security_device_record.h"
 #include "stack/include/btm_api_types.h"
+#include "stack/include/hci_error_code.h"
 
 #define BTM_SEC_MAX_COLLISION_DELAY (5000)
 
@@ -596,7 +597,7 @@ void btm_read_local_oob_complete(uint8_t* p);
  * Returns          void
  *
  ******************************************************************************/
-void btm_sec_auth_complete(uint16_t handle, uint8_t status);
+void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status);
 
 /*******************************************************************************
  *
@@ -633,7 +634,7 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
  * Returns          btm status
  *
  ******************************************************************************/
-tBTM_STATUS btm_sec_disconnect(uint16_t handle, uint8_t reason);
+tBTM_STATUS btm_sec_disconnect(uint16_t handle, tHCI_STATUS reason);
 
 /*******************************************************************************
  *
@@ -645,7 +646,7 @@ tBTM_STATUS btm_sec_disconnect(uint16_t handle, uint8_t reason);
  * Returns          void
  *
  ******************************************************************************/
-void btm_sec_disconnected(uint16_t handle, uint8_t reason);
+void btm_sec_disconnected(uint16_t handle, tHCI_STATUS reason);
 
 /** This function is called when a new connection link key is generated */
 void btm_sec_link_key_notification(const RawAddress& p_bda,

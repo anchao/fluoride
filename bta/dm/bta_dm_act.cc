@@ -191,47 +191,6 @@ const uint16_t bta_service_id_to_uuid_lkup_tbl[BTA_MAX_SERVICE_ID] = {
     UUID_PROTOCOL_ATT                     /* BTA_GATT_SERVICE_ID */
 };
 
-/*
- * NOTE : The number of element in bta_service_id_to_btm_srv_id_lkup_tbl should
- * be matching with the value BTA_MAX_SERVICE_ID in bta_api.h
- *
- * i.e., If you add new Service ID for BTA, the correct security ID of the new
- * service from Security service definitions (btm_api.h) should be added to
- * this lookup table.
- */
-const uint32_t bta_service_id_to_btm_srv_id_lkup_tbl[BTA_MAX_SERVICE_ID] = {
-    0,                             /* Reserved */
-    BTM_SEC_SERVICE_SERIAL_PORT,   /* BTA_SPP_SERVICE_ID */
-    BTM_SEC_SERVICE_DUN,           /* BTA_DUN_SERVICE_ID */
-    BTM_SEC_SERVICE_AVDTP,         /* BTA_AUDIO_SOURCE_SERVICE_ID */
-    BTM_SEC_SERVICE_LAN_ACCESS,    /* BTA_LAP_SERVICE_ID */
-    BTM_SEC_SERVICE_HEADSET_AG,    /* BTA_HSP_SERVICE_ID */
-    BTM_SEC_SERVICE_AG_HANDSFREE,  /* BTA_HFP_SERVICE_ID */
-    BTM_SEC_SERVICE_OBEX,          /* BTA_OPP_SERVICE_ID */
-    BTM_SEC_SERVICE_OBEX_FTP,      /* BTA_FTP_SERVICE_ID */
-    BTM_SEC_SERVICE_CORDLESS,      /* BTA_CTP_SERVICE_ID */
-    BTM_SEC_SERVICE_INTERCOM,      /* BTA_ICP_SERVICE_ID */
-    BTM_SEC_SERVICE_IRMC_SYNC,     /* BTA_SYNC_SERVICE_ID */
-    BTM_SEC_SERVICE_BPP_JOB,       /* BTA_BPP_SERVICE_ID */
-    BTM_SEC_SERVICE_BIP,           /* BTA_BIP_SERVICE_ID */
-    BTM_SEC_SERVICE_BNEP_PANU,     /* BTA_PANU_SERVICE_ID */
-    BTM_SEC_SERVICE_BNEP_NAP,      /* BTA_NAP_SERVICE_ID */
-    BTM_SEC_SERVICE_BNEP_GN,       /* BTA_GN_SERVICE_ID */
-    BTM_SEC_SERVICE_SAP,           /* BTA_SAP_SERVICE_ID */
-    BTM_SEC_SERVICE_AVDTP,         /* BTA_A2DP_SERVICE_ID */
-    BTM_SEC_SERVICE_AVCTP,         /* BTA_AVRCP_SERVICE_ID */
-    BTM_SEC_SERVICE_HIDH_SEC_CTRL, /* BTA_HID_SERVICE_ID */
-    BTM_SEC_SERVICE_AVDTP,         /* BTA_VDP_SERVICE_ID */
-    BTM_SEC_SERVICE_PBAP,          /* BTA_PBAP_SERVICE_ID */
-    BTM_SEC_SERVICE_HEADSET,       /* BTA_HSP_HS_SERVICE_ID */
-    BTM_SEC_SERVICE_HF_HANDSFREE,  /* BTA_HFP_HS_SERVICE_ID */
-    BTM_SEC_SERVICE_MAP,           /* BTA_MAP_SERVICE_ID */
-    BTM_SEC_SERVICE_MAP,           /* BTA_MN_SERVICE_ID */
-    BTM_SEC_SERVICE_HDP_SNK,       /* BTA_HDP_SERVICE_ID */
-    BTM_SEC_SERVICE_PBAP,          /* BTA_PCE_SERVICE_ID */
-    BTM_SEC_SERVICE_ATT            /* BTA_GATT_SERVICE_ID */
-};
-
 /* bta security callback */
 const tBTM_APPL_INFO bta_security = {&bta_dm_pin_cback,
                                      &bta_dm_new_link_key_cback,
@@ -570,7 +529,7 @@ void bta_dm_remove_device(const RawAddress& bd_addr) {
       if (peer_device.peer_bdaddr == bd_addr) {
         peer_device.conn_state = BTA_DM_UNPAIRING;
 
-        /* Make sure device is not in white list before we disconnect */
+        /* Make sure device is not in acceptlist before we disconnect */
         GATT_CancelConnect(0, bd_addr, false);
 
         btm_remove_acl(bd_addr, peer_device.transport);
@@ -610,7 +569,7 @@ void bta_dm_remove_device(const RawAddress& bd_addr) {
       if (peer_device.peer_bdaddr == other_address) {
         peer_device.conn_state = BTA_DM_UNPAIRING;
 
-        /* Make sure device is not in white list before we disconnect */
+        /* Make sure device is not in acceptlist before we disconnect */
         GATT_CancelConnect(0, bd_addr, false);
 
         btm_remove_acl(other_address, peer_device.transport);
@@ -681,7 +640,7 @@ void bta_dm_close_acl(const RawAddress& bd_addr, bool remove_dev,
       APPL_TRACE_ERROR("unknown device, remove ACL failed");
     }
 
-    /* Make sure device is not in white list before we disconnect */
+    /* Make sure device is not in acceptlist before we disconnect */
     GATT_CancelConnect(0, bd_addr, false);
 
     /* Disconnect the ACL link */
@@ -2198,15 +2157,15 @@ static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
     bool need_policy_change = false;
 
     /* there's AV activity on this link */
-    if (new_role == HCI_ROLE_SLAVE && bta_dm_cb.device_list.count > 1 &&
+    if (new_role == HCI_ROLE_PERIPHERAL && bta_dm_cb.device_list.count > 1 &&
         hci_status == HCI_SUCCESS) {
       /* more than one connections and the AV connection is role switched
-       * to slave
-       * switch it back to master and remove the switch policy */
-      BTM_SwitchRole(bd_addr, HCI_ROLE_MASTER);
+       * to peripheral
+       * switch it back to central and remove the switch policy */
+      BTM_SwitchRole(bd_addr, HCI_ROLE_CENTRAL);
       need_policy_change = true;
-    } else if (p_bta_dm_cfg->avoid_scatter && (new_role == HCI_ROLE_MASTER)) {
-      /* if the link updated to be master include AV activities, remove
+    } else if (p_bta_dm_cfg->avoid_scatter && (new_role == HCI_ROLE_CENTRAL)) {
+      /* if the link updated to be central include AV activities, remove
        * the switch policy */
       need_policy_change = true;
     }
@@ -2217,7 +2176,7 @@ static void handle_role_change(const RawAddress& bd_addr, uint8_t new_role,
   } else {
     /* there's AV no activity on this link and role switch happened
      * check if AV is active
-     * if so, make sure the AV link is master */
+     * if so, make sure the AV link is central */
     bta_dm_check_av();
   }
   bta_sys_notify_role_chg(bd_addr, new_role, hci_status);
@@ -2254,8 +2213,7 @@ static tBTA_DM_PEER_DEVICE* allocate_device_for(const RawAddress& bd_addr,
 static void bta_dm_acl_up(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
   auto device = allocate_device_for(bd_addr, transport);
   if (device == nullptr) {
-    APPL_TRACE_ERROR("%s max active connection reached, no resources",
-                     __func__);
+    LOG_WARN("Unable to allocate device resources for new connection");
     return;
   }
   device->conn_state = BTA_DM_CONNECTED;
@@ -2274,6 +2232,7 @@ static void bta_dm_acl_up(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
     conn.link_up.bd_addr = bd_addr;
 
     bta_dm_cb.p_sec_cback(BTA_DM_LINK_UP_EVT, &conn);
+    LOG_DEBUG("Executed security callback for new connection available");
   }
   bta_dm_adjust_roles(true);
 }
@@ -2374,7 +2333,7 @@ void BTA_dm_acl_down(const RawAddress bd_addr, tBT_TRANSPORT transport) {
  * Function         bta_dm_check_av
  *
  * Description      This function checks if AV is active
- *                  if yes, make sure the AV link is master
+ *                  if yes, make sure the AV link is central
  *
  ******************************************************************************/
 static void bta_dm_check_av() {
@@ -2389,9 +2348,9 @@ static void bta_dm_check_av() {
                          p_dev->info);
       if ((p_dev->conn_state == BTA_DM_CONNECTED) &&
           (p_dev->info & BTA_DM_DI_AV_ACTIVE)) {
-        /* make master and take away the role switch policy */
-        BTM_SwitchRole(p_dev->peer_bdaddr, HCI_ROLE_MASTER);
-        /* else either already master or can not switch for some reasons */
+        /* make central and take away the role switch policy */
+        BTM_SwitchRole(p_dev->peer_bdaddr, HCI_ROLE_CENTRAL);
+        /* else either already central or can not switch for some reasons */
         BTM_block_role_switch_for(p_dev->peer_bdaddr);
         break;
       }
@@ -2571,9 +2530,8 @@ static void bta_dm_adjust_roles(bool delay_role_switch) {
       if (bta_dm_cb.device_list.peer_device[i].conn_state == BTA_DM_CONNECTED &&
           bta_dm_cb.device_list.peer_device[i].transport ==
               BT_TRANSPORT_BR_EDR) {
-
         if ((bta_dm_cb.device_list.peer_device[i].pref_role ==
-             BTA_MASTER_ROLE_ONLY) ||
+             BTA_CENTRAL_ROLE_ONLY) ||
             (br_count > 1)) {
           /* Initiating immediate role switch with certain remote devices
             has caused issues due to role  switch colliding with link encryption
@@ -2585,10 +2543,10 @@ static void bta_dm_adjust_roles(bool delay_role_switch) {
             delayed to avoid the collision with link encryption setup */
 
           if (bta_dm_cb.device_list.peer_device[i].pref_role !=
-                  BTA_SLAVE_ROLE_ONLY &&
+                  BTA_PERIPHERAL_ROLE_ONLY &&
               !delay_role_switch) {
             BTM_SwitchRole(bta_dm_cb.device_list.peer_device[i].peer_bdaddr,
-                           HCI_ROLE_MASTER);
+                           HCI_ROLE_CENTRAL);
           } else {
             alarm_set_on_mloop(bta_dm_cb.switch_delay_timer,
                                BTA_DM_SWITCH_DELAY_TIMER_MS,
@@ -3271,6 +3229,16 @@ static uint8_t bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda,
                        p_data->io_req.oob_data);
       break;
 
+    case BTM_LE_CONSENT_REQ_EVT:
+      sec_event.ble_req.bd_addr = bda;
+      p_name = BTM_SecReadDevName(bda);
+      if (p_name != NULL)
+        strlcpy((char*)sec_event.ble_req.bd_name, p_name, BD_NAME_LEN);
+      else
+        sec_event.ble_req.bd_name[0] = 0;
+      bta_dm_cb.p_sec_cback(BTA_DM_BLE_CONSENT_REQ_EVT, &sec_event);
+      break;
+
     case BTM_LE_SEC_REQUEST_EVT:
       sec_event.ble_req.bd_addr = bda;
       p_name = (bluetooth::shim::is_gd_security_enabled())
@@ -3442,7 +3410,7 @@ void bta_dm_add_blekey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE blekey,
  ******************************************************************************/
 void bta_dm_add_ble_device(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
                            tBT_DEVICE_TYPE dev_type) {
-  if (!BTM_SecAddBleDevice(bd_addr, NULL, dev_type, addr_type)) {
+  if (!BTM_SecAddBleDevice(bd_addr, dev_type, addr_type)) {
     LOG(ERROR) << "BTA_DM: Error adding BLE Device for device " << bd_addr;
   }
 }
@@ -3474,13 +3442,13 @@ void bta_dm_ble_confirm_reply(const RawAddress& bd_addr, bool accept) {
 /** This function set the preferred connection parameters */
 void bta_dm_ble_set_conn_params(const RawAddress& bd_addr,
                                 uint16_t conn_int_min, uint16_t conn_int_max,
-                                uint16_t slave_latency,
+                                uint16_t peripheral_latency,
                                 uint16_t supervision_tout) {
   L2CA_AdjustConnectionIntervals(&conn_int_min, &conn_int_max,
                                  BTM_BLE_CONN_INT_MIN);
 
-  BTM_BleSetPrefConnParams(bd_addr, conn_int_min, conn_int_max, slave_latency,
-                           supervision_tout);
+  BTM_BleSetPrefConnParams(bd_addr, conn_int_min, conn_int_max,
+                           peripheral_latency, supervision_tout);
 }
 
 /** This function update LE connection parameters */

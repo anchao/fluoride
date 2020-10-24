@@ -70,8 +70,8 @@ class ConnectionManagementCallbacks {
   virtual void OnReadRssiComplete(uint8_t rssi) = 0;
   // Invoked when controller sends Command Complete event for Read Clock command with Success error code
   virtual void OnReadClockComplete(uint32_t clock, uint16_t accuracy) = 0;
-  // Invoked when controller sends Master Link Key Complete event
-  virtual void OnMasterLinkKeyComplete(KeyFlag key_flag) = 0;
+  // Invoked when controller sends Central Link Key Complete event
+  virtual void OnCentralLinkKeyComplete(KeyFlag key_flag) = 0;
   // Invoked when controller sends Role Change event
   virtual void OnRoleChange(Role new_role) = 0;
   // Invoked when controller sends DisconnectComplete
@@ -79,6 +79,9 @@ class ConnectionManagementCallbacks {
   // Invoked when controller sends Read Remote Version Information Complete
   virtual void OnReadRemoteVersionInformationComplete(
       uint8_t lmp_version, uint16_t manufacturer_name, uint16_t sub_version) = 0;
+  // Invoked when controller sends Read Remote Extended Features Complete
+  virtual void OnReadRemoteExtendedFeaturesComplete(
+      uint8_t page_number, uint8_t max_page_number, uint64_t features) = 0;
 };
 
 }  // namespace acl_manager

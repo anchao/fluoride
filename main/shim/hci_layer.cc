@@ -67,7 +67,7 @@ bool IsCommandStatusOpcode(bluetooth::hci::OpCode op_code) {
     case bluetooth::hci::OpCode::AUTHENTICATION_REQUESTED:
     case bluetooth::hci::OpCode::SET_CONNECTION_ENCRYPTION:
     case bluetooth::hci::OpCode::CHANGE_CONNECTION_LINK_KEY:
-    case bluetooth::hci::OpCode::MASTER_LINK_KEY:
+    case bluetooth::hci::OpCode::CENTRAL_LINK_KEY:
     case bluetooth::hci::OpCode::REMOTE_NAME_REQUEST:
     case bluetooth::hci::OpCode::READ_REMOTE_SUPPORTED_FEATURES:
     case bluetooth::hci::OpCode::READ_REMOTE_EXTENDED_FEATURES:
@@ -120,7 +120,7 @@ bool is_valid_event_code(uint8_t event_code_raw) {
     case bluetooth::hci::EventCode::REMOTE_NAME_REQUEST_COMPLETE:
     case bluetooth::hci::EventCode::ENCRYPTION_CHANGE:
     case bluetooth::hci::EventCode::CHANGE_CONNECTION_LINK_KEY_COMPLETE:
-    case bluetooth::hci::EventCode::MASTER_LINK_KEY_COMPLETE:
+    case bluetooth::hci::EventCode::CENTRAL_LINK_KEY_COMPLETE:
     case bluetooth::hci::EventCode::READ_REMOTE_SUPPORTED_FEATURES_COMPLETE:
     case bluetooth::hci::EventCode::READ_REMOTE_VERSION_INFORMATION_COMPLETE:
     case bluetooth::hci::EventCode::QOS_SETUP_COMPLETE:
@@ -223,10 +223,10 @@ static bool event_already_registered_in_hci_layer(
     case bluetooth::hci::EventCode::PAGE_SCAN_REPETITION_MODE_CHANGE:
     case bluetooth::hci::EventCode::MAX_SLOTS_CHANGE:
     case bluetooth::hci::EventCode::VENDOR_SPECIFIC:
-      return true;
+      return bluetooth::shim::is_gd_hci_enabled();
     case bluetooth::hci::EventCode::LE_META_EVENT:
     case bluetooth::hci::EventCode::DISCONNECTION_COMPLETE:
-      return bluetooth::shim::is_gd_shim_enabled();
+      return bluetooth::shim::is_gd_acl_enabled();
     default:
       return false;
   }
@@ -236,7 +236,7 @@ static bool event_already_registered_in_controller_layer(
     bluetooth::hci::EventCode event_code) {
   switch (event_code) {
     case bluetooth::hci::EventCode::NUMBER_OF_COMPLETED_PACKETS:
-      return bluetooth::shim::is_gd_controller_enabled();
+      return bluetooth::shim::is_gd_acl_enabled();
     default:
       return false;
   }

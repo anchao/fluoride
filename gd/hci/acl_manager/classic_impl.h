@@ -192,14 +192,14 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
     ASSERT(connection_complete.IsValid());
     auto status = connection_complete.GetStatus();
     auto address = connection_complete.GetBdAddr();
-    Role current_role = Role::MASTER;
+    Role current_role = Role::CENTRAL;
     if (outgoing_connecting_address_ == address) {
       outgoing_connecting_address_ = Address::kEmpty;
     } else {
       ASSERT_LOG(incoming_connecting_address_ == address, "No prior connection request for %s",
                  address.ToString().c_str());
       incoming_connecting_address_ = Address::kEmpty;
-      current_role = Role::SLAVE;
+      current_role = Role::PERIPHERAL;
     }
     if (status != ErrorCode::SUCCESS) {
       client_handler_->Post(common::BindOnce(&ConnectionCallbacks::OnConnectFail, common::Unretained(client_callbacks_),
@@ -252,21 +252,21 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
     acl_connection.connection_management_callbacks_->OnConnectionPacketTypeChanged(packet_type);
   }
 
-  void on_master_link_key_complete(EventPacketView packet) {
-    MasterLinkKeyCompleteView complete_view = MasterLinkKeyCompleteView::Create(packet);
+  void on_central_link_key_complete(EventPacketView packet) {
+    CentralLinkKeyCompleteView complete_view = CentralLinkKeyCompleteView::Create(packet);
     if (!complete_view.IsValid()) {
-      LOG_ERROR("Received on_master_link_key_complete with invalid packet");
+      LOG_ERROR("Received on_central_link_key_complete with invalid packet");
       return;
     } else if (complete_view.GetStatus() != ErrorCode::SUCCESS) {
       auto status = complete_view.GetStatus();
       std::string error_code = ErrorCodeText(status);
-      LOG_ERROR("Received on_master_link_key_complete with error code %s", error_code.c_str());
+      LOG_ERROR("Received on_central_link_key_complete with error code %s", error_code.c_str());
       return;
     }
     uint16_t handle = complete_view.GetConnectionHandle();
     auto& acl_connection = acl_connections_.find(handle)->second;
     KeyFlag key_flag = complete_view.GetKeyFlag();
-    acl_connection.connection_management_callbacks_->OnMasterLinkKeyComplete(key_flag);
+    acl_connection.connection_management_callbacks_->OnCentralLinkKeyComplete(key_flag);
   }
 
   void on_authentication_complete(EventPacketView packet) {
@@ -295,10 +295,10 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
         std::move(packet), handler_->BindOnce(&check_command_complete<CreateConnectionCancelCompleteView>));
   }
 
-  void master_link_key(KeyFlag key_flag) {
-    std::unique_ptr<MasterLinkKeyBuilder> packet = MasterLinkKeyBuilder::Create(key_flag);
-    acl_connection_interface_->EnqueueCommand(std::move(packet),
-                                              handler_->BindOnce(&check_command_status<MasterLinkKeyStatusView>));
+  void central_link_key(KeyFlag key_flag) {
+    std::unique_ptr<CentralLinkKeyBuilder> packet = CentralLinkKeyBuilder::Create(key_flag);
+    acl_connection_interface_->EnqueueCommand(
+        std::move(packet), handler_->BindOnce(&check_command_status<CentralLinkKeyStatusView>));
   }
 
   void switch_role(Address address, Role role) {
@@ -315,7 +315,7 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
   }
 
   void accept_connection(Address address) {
-    auto role = AcceptConnectionRequestRole::BECOME_MASTER;  // We prefer to be master
+    auto role = AcceptConnectionRequestRole::BECOME_CENTRAL;  // We prefer to be central
     acl_connection_interface_->EnqueueCommand(
         AcceptConnectionRequestBuilder::Create(address, role),
         handler_->BindOnceOn(this, &classic_impl::on_accept_connection_status, address));
@@ -457,7 +457,10 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
       LOG_ERROR("Received on_read_remote_version_information_complete with error code %s", error_code.c_str());
       return;
     }
-    LOG_INFO("UNIMPLEMENTED called");
+    uint16_t handle = view.GetConnectionHandle();
+    auto& acl_connection = acl_connections_.find(handle)->second;
+    acl_connection.connection_management_callbacks_->OnReadRemoteVersionInformationComplete(
+        view.GetVersion(), view.GetManufacturerName(), view.GetSubVersion());
   }
 
   void on_read_remote_supported_features_complete(EventPacketView packet) {
@@ -469,7 +472,10 @@ struct classic_impl : public DisconnectorForLe, public security::ISecurityManage
   void on_read_remote_extended_features_complete(EventPacketView packet) {
     auto view = ReadRemoteExtendedFeaturesCompleteView::Create(packet);
     ASSERT_LOG(view.IsValid(), "Read remote extended features packet invalid");
-    LOG_INFO("UNIMPLEMENTED called");
+    uint16_t handle = view.GetConnectionHandle();
+    auto& acl_connection = acl_connections_.find(handle)->second;
+    acl_connection.connection_management_callbacks_->OnReadRemoteExtendedFeaturesComplete(
+        view.GetPageNumber(), view.GetMaximumPageNumber(), view.GetExtendedLmpFeatures());
   }
 
   void on_link_supervision_timeout_changed(EventPacketView packet) {
