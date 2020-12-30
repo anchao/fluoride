@@ -101,7 +101,11 @@ static tBTA_SERVICE_MASK btif_enabled_services = 0;
  */
 static uint8_t btif_dut_mode = 0;
 
+#if !defined(CONFIG_FLUORIDE_JNI_STACKSIZE)
 static MessageLoopThread jni_thread("bt_jni_thread");
+#else
+static MessageLoopThread jni_thread("bt_jni_thread", CONFIG_FLUORIDE_JNI_STACKSIZE);
+#endif
 static base::AtExitManager* exit_manager;
 static uid_set_t* uid_set;
 

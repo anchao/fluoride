@@ -79,7 +79,11 @@ extern void btm_free(void);
 
 using bluetooth::common::MessageLoopThread;
 
+#if !defined(CONFIG_FLUORIDE_MANAGER_STACKSIZE)
 static MessageLoopThread management_thread("bt_stack_manager_thread");
+#else
+static MessageLoopThread management_thread("bt_stack_manager_thread", CONFIG_FLUORIDE_MANAGER_STACKSIZE);
+#endif
 
 // If initialized, any of the bluetooth API functions can be called.
 // (e.g. turning logging on and off, enabling/disabling the stack, etc)

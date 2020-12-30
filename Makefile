@@ -158,6 +158,8 @@ ifeq ($(CONFIG_ARCH_SIM),y)
   FLRDFLAGS += -ffunction-sections -fdata-sections
 endif
 
+FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port}
+FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" .}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" bta/sys}
@@ -196,8 +198,6 @@ FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" packet/avrcp}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" vnd/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" audio_hal_interface}
 
-FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port}
-FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" port/include}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android}
 FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" android/frameworks/base/core/proto}
 
@@ -258,7 +258,7 @@ CFLAGS   += $(FLRDFLAGS)
 ifneq ($(CONFIG_FLUORIDE_EXAMPLES),)
 
   PRIORITY  = SCHED_PRIORITY_DEFAULT
-  STACKSIZE = 20480
+  STACKSIZE = $(CONFIG_DEFAULT_TASK_STACKSIZE)
   MODULE    = $(CONFIG_FLUORIDE_EXAMPLES)
 
   ifneq ($(CONFIG_FLUORIDE_EXAMPLES_A2DP_SINK),)

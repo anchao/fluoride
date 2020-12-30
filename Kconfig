@@ -19,8 +19,11 @@ menu "Bluetooth Stack: Android Fluoride Bluetooth Stack"
 menuconfig LIB_FLUORIDE
   bool "Android Fluoride Bluetooth stack"
   default n
+  select CRYPTO
+  select CRYPTO_RANDOM_POOL
   select EVENT_FD
   select DEV_URANDOM
+  select DEV_URANDOM_RANDOM_POOL
   select LIB_CHROMIUM
   select LIB_TINYXML2
   help
@@ -37,8 +40,21 @@ config FLUORIDE_MAJOR_CLASS
   default 0x40
 
 config FLUORIDE_MINOR_CLASS
-  hex "Fluoride Major Class"
+  hex "Fluoride Minor Class"
   default 0x08
+
+config FLUORIDE_HCI_H4
+  bool "H:4 UART"
+  default n
+  help
+    Bluetooth H:4 UART driver. Requires hardware flow control
+    lines to be available.
+
+config FLUORIDE_HCI_USB
+  bool "H:2 USB"
+  default n
+  help
+    Bluetooth H:2 USB driver.
 
 config FLUORIDE_DEVICE_NAME
   string "Bluetooth device name"
@@ -66,24 +82,65 @@ config FLUORIDE_STACK_CONFIG_PATH
   string "Fluoride stack config path"
   default "/etc/init.d/bt_stack.conf"
 
-config FLUORIDE_HCI_H4
-  bool "H:4 UART"
-  default n
-  help
-    Bluetooth H:4 UART driver. Requires hardware flow control
-    lines to be available.
-
-config FLUORIDE_HCI_USB
-  bool "H:2 USB"
-  default n
-  help
-    Bluetooth H:2 USB driver.
-
 config FLUORIDE_HCI_RX_STACKSIZE
   int "BT HCI RX thread stack size"
   default DEFAULT_TASK_STACKSIZE
   help
     Bluetooth HCI RX thread stack size.
+
+config FLUORIDE_MAIN_STACKSIZE
+  int "BT main thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth main thread stack size.
+
+config FLUORIDE_JNI_STACKSIZE
+  int "BT JNI thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth JNI thread stack size.
+
+config FLUORIDE_HCI_STACKSIZE
+  int "BT HCI thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth HCI thread stack size.
+
+config FLUORIDE_MANAGER_STACKSIZE
+  int "BT manager thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth manager thread stack size.
+
+config FLUORIDE_A2DP_SINK_STACKSIZE
+  int "BT a2dp sink thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth a2dp sink thread stack size.
+
+config FLUORIDE_A2DP_SOURCE_STACKSIZE
+  int "BT a2dp source thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth a2dp source thread stack size.
+
+config FLUORIDE_ALARM_DISPATCHER_STACKSIZE
+  int "BT alarm dispatcher thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth alarm dispatcher thread stack size.
+
+config FLUORIDE_ALARM_CALLBACK_STACKSIZE
+  int "BT alarm callback thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth alarm callback thread stack size.
+
+config FLUORIDE_ALARM_DEPRECATED_STACKSIZE
+  int "BT alarm deprecated thread stack size"
+  default DEFAULT_TASK_STACKSIZE
+  help
+    Bluetooth alarm deprecated thread stack size.
 
 if FLUORIDE_HCI_H4
 

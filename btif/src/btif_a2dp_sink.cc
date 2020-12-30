@@ -85,7 +85,11 @@ typedef struct {
 class BtifA2dpSinkControlBlock {
  public:
   explicit BtifA2dpSinkControlBlock(const std::string& thread_name)
+#if !defined(CONFIG_FLUORIDE_A2DP_SINK_STACKSIZE)
       : worker_thread(thread_name),
+#else
+      : worker_thread(thread_name, CONFIG_FLUORIDE_A2DP_SINK_STACKSIZE),
+#endif
         rx_audio_queue(nullptr),
         rx_flush(false),
         decode_alarm(nullptr),

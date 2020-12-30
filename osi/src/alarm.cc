@@ -310,6 +310,20 @@ void alarm_cleanup(void) {
   alarms = NULL;
 }
 
+#if defined(CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE)
+static void *timer_dispatcher_thread(void *arg) {
+
+  prctl(PR_SET_NAME, "alarm_deprecated");
+
+  while (true) {
+    sem_wait(&g_alarm_thread_sem);
+    semaphore_post(alarm_expired);
+  }
+
+  return NULL;
+}
+#endif
+
 static bool lazy_initialize(void) {
   CHECK(alarms == NULL);
 
@@ -342,8 +356,23 @@ static bool lazy_initialize(void) {
     goto error;
   }
 
+#if defined(CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE)
+  pthread_t pid;
+  pthread_attr_t pattr;
+
+  pthread_attr_init(&pattr);
+  pthread_attr_setstacksize(&pattr, CONFIG_FLUORIDE_ALARM_DEPRECATED_STACKSIZE);
+  pthread_create(&pid, &pattr, timer_dispatcher_thread, NULL);
+  pthread_attr_destroy(&pattr);
+#endif
+
+#if !defined(CONFIG_FLUORIDE_ALARM_CALLBACK_STACKSIZE)
   default_callback_thread =
       thread_new_sized("alarm_default_callbacks", SIZE_MAX);
+#else
+  default_callback_thread =
+      thread_new_sized("alarm_default_callbacks", SIZE_MAX, CONFIG_FLUORIDE_ALARM_CALLBACK_STACKSIZE);
+#endif
   if (default_callback_thread == NULL) {
     LOG_ERROR("%s unable to create default alarm callbacks thread.", __func__);
     goto error;
@@ -358,7 +387,11 @@ static bool lazy_initialize(void) {
                                   default_callback_thread);
 
   dispatcher_thread_active = true;
+#if !defined(CONFIG_FLUORIDE_ALARM_DISPATCHER_STACKSIZE)
   dispatcher_thread = thread_new("alarm_dispatcher");
+#else
+  dispatcher_thread = thread_new("alarm_dispatcher", CONFIG_FLUORIDE_ALARM_DISPATCHER_STACKSIZE);
+#endif
   if (!dispatcher_thread) {
     LOG_ERROR("%s unable to create alarm callback thread.", __func__);
     goto error;
@@ -669,16 +702,6 @@ static void callback_dispatch(UNUSED_ATTR void* context) {
   LOG_INFO("%s Callback thread exited", __func__);
 }
 
-static void *timer_dispatcher_thread(void *arg) {
-
-  while (1) {
-    sem_wait(&g_alarm_thread_sem);
-    semaphore_post(alarm_expired);
-  }
-
-  return NULL;
-}
-
 static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
   CHECK(timer != NULL);
 
@@ -710,9 +733,6 @@ static bool timer_create_internal(const clockid_t clock_id, timer_t* timer) {
     }
     return false;
   }
-
-  pthread_t pid;
-  pthread_create(&pid, NULL, timer_dispatcher_thread, NULL);
 
   return true;
 }
