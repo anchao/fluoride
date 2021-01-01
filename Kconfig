@@ -64,11 +64,11 @@ config FLUORIDE_DEVICE_NAME
 
 config FLUORIDE_FILE_PATH
   string "Fluoride config path"
-  default "/etc/init.d/bt_config.conf"
+  default "/data/bt_config.conf"
 
 config FLUORIDE_BACKUP_PATH
   string "Fluoride config backup path"
-  default "/etc/init.d/bt_config.bak"
+  default "/data/bt_config.bak"
 
 config FLUORIDE_LEGACY_FILE_PATH
   string "Fluoride config backup path"
