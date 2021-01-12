@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "bt_target.h"
+#include "main/shim/dumpsys.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
@@ -895,9 +896,12 @@ static void bta_av_sco_chg_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
   int i;
   tBTA_AV_API_STOP stop;
 
-  LOG(INFO) << __func__ << ": status=" << +status << ", num_links=" << +id;
+  LOG(INFO) << __func__ << ": status=" << bta_sys_conn_status_text(status)
+            << ", num_links=" << +id;
   if (id) {
     bta_av_cb.sco_occupied = true;
+    LOG_DEBUG("SCO occupied peer:%s status:%s", PRIVATE_ADDRESS(peer_addr),
+              bta_sys_conn_status_text(status).c_str());
 
     if (bta_av_cb.features & BTA_AV_FEAT_NO_SCO_SSPD) {
       return;
@@ -919,6 +923,8 @@ static void bta_av_sco_chg_cback(tBTA_SYS_CONN_STATUS status, uint8_t id,
     }
   } else {
     bta_av_cb.sco_occupied = false;
+    LOG_DEBUG("SCO unoccupied peer:%s status:%s", PRIVATE_ADDRESS(peer_addr),
+              bta_sys_conn_status_text(status).c_str());
 
     if (bta_av_cb.features & BTA_AV_FEAT_NO_SCO_SSPD) {
       return;
@@ -1010,19 +1016,15 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits) {
         __func__, p_scb->PeerAddress().ToString().c_str(), p_scb->hndl, role,
         bta_av_cb.conn_audio, bits, bta_av_cb.features);
     if (HCI_ROLE_CENTRAL != role &&
-        (A2DP_BitsSet(bta_av_cb.conn_audio) > bits ||
-         (bta_av_cb.features & BTA_AV_FEAT_CENTRAL))) {
-      if (bta_av_cb.features & BTA_AV_FEAT_CENTRAL)
-        BTM_block_role_switch_for(p_scb->PeerAddress());
-
-      tBTM_STATUS status =
-          BTM_SwitchRole(p_scb->PeerAddress(), HCI_ROLE_CENTRAL);
+        (A2DP_BitsSet(bta_av_cb.conn_audio) > bits)) {
+      tBTM_STATUS status = BTM_SwitchRoleToCentral(p_scb->PeerAddress());
       if (status != BTM_CMD_STARTED) {
         /* can not switch role on SCB - start the timer on SCB */
-        LOG_ERROR("%s: peer %s BTM_SwitchRole(HCI_ROLE_CENTRAL) error: %d",
-                  __func__, p_scb->PeerAddress().ToString().c_str(), status);
+        LOG_ERROR(
+            "%s: peer %s BTM_SwitchRoleToCentral(HCI_ROLE_CENTRAL) error: %d",
+            __func__, p_scb->PeerAddress().ToString().c_str(), status);
       }
-      if (status != BTM_MODE_UNSUPPORTED && status != BTM_DEV_BLACKLISTED) {
+      if (status != BTM_MODE_UNSUPPORTED && status != BTM_DEV_RESTRICT_LISTED) {
         is_ok = false;
         p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_START;
       }

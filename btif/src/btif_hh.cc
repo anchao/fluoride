@@ -469,8 +469,13 @@ void btif_hh_remove_device(RawAddress bd_addr) {
 
   /* need to notify up-layer device is disconnected to avoid state out of sync
    * with up-layer */
-  HAL_CBACK(bt_hh_callbacks, connection_state_cb, &(p_dev->bd_addr),
-            BTHH_CONN_STATE_DISCONNECTED);
+
+  do_in_jni_thread(base::Bind(
+      [](RawAddress bd_addr) {
+        HAL_CBACK(bt_hh_callbacks, connection_state_cb, &bd_addr,
+                  BTHH_CONN_STATE_DISCONNECTED);
+      },
+      p_dev->bd_addr));
 
   p_dev->dev_status = BTHH_CONN_STATE_UNKNOWN;
   p_dev->dev_handle = BTA_HH_INVALID_HANDLE;
@@ -651,6 +656,26 @@ void btif_hh_setreport(btif_hh_device_t* p_dev, bthh_report_type_t r_type,
     return;
   }
   BTA_HhSetReport(p_dev->dev_handle, r_type, p_buf);
+}
+
+/*******************************************************************************
+ *
+ * Function         btif_btif_hh_senddata
+ *
+ * Description      senddata initiated from the BTIF thread context
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btif_hh_senddata(btif_hh_device_t* p_dev, uint16_t size, uint8_t* report) {
+  BT_HDR* p_buf = create_pbuf(size, report);
+  if (p_buf == NULL) {
+    APPL_TRACE_ERROR("%s: Error, failed to allocate RPT buffer, size = %d",
+                     __func__, size);
+    return;
+  }
+  p_buf->layer_specific = BTA_HH_RPTT_OUTPUT;
+  BTA_HhSendData(p_dev->dev_handle, p_dev->bd_addr, p_buf);
 }
 
 /*******************************************************************************

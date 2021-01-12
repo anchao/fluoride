@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "bt_common.h"
-#include "btm_int.h"
 #include "device/include/controller.h"
 #include "gatt_api.h"
 #include "gatt_int.h"
@@ -137,6 +136,17 @@ static void gatt_update_last_srv_info() {
 
   for (tGATT_SRV_LIST_ELEM& el : *gatt_cb.srv_list_info) {
     gatt_cb.last_service_handle = el.s_hdl;
+  }
+}
+
+/** Update database hash and client status */
+static void gatt_update_for_database_change() {
+  gatt_cb.database_hash = gatts_calculate_database_hash(gatt_cb.srv_list_info);
+
+  uint8_t i = 0;
+  for (i = 0; i < GATT_MAX_PHY_CHANNEL; i++) {
+    tGATT_TCB& tcb = gatt_cb.tcb[i];
+    if (tcb.in_use) gatt_sr_update_cl_status(tcb, /* chg_aware= */ false);
   }
 }
 
@@ -309,6 +319,7 @@ tGATT_STATUS GATTS_AddService(tGATT_IF gatt_if, btgatt_db_element_t* service,
           << ", e_hdl=" << loghex(elem.e_hdl) << ", type=" << loghex(elem.type)
           << ", sdp_hdl=" << loghex(elem.sdp_handle);
 
+  gatt_update_for_database_change();
   gatt_proc_srv_chg();
 
   return GATT_SERVICE_STARTED;
@@ -359,11 +370,12 @@ bool GATTS_DeleteService(tGATT_IF gatt_if, Uuid* p_svc_uuid,
     return false;
   }
 
-  gatt_proc_srv_chg();
-
   if (is_active_service(p_reg->app_uuid128, p_svc_uuid, svc_inst)) {
     GATTS_StopService(it->asgn_range.s_handle);
   }
+
+  gatt_update_for_database_change();
+  gatt_proc_srv_chg();
 
   VLOG(1) << "released handles s_hdl=" << loghex(it->asgn_range.s_handle)
           << ", e_hdl=" << loghex(it->asgn_range.e_handle);
@@ -592,10 +604,13 @@ tGATT_STATUS GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
   tGATT_TCB* p_tcb = gatt_get_tcb_by_idx(tcb_idx);
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
 
-  VLOG(1) << __func__ << ": conn_id=" << loghex(conn_id) << ", mtu=" << +mtu;
-
   if ((p_tcb == NULL) || (p_reg == NULL) || (mtu < GATT_DEF_BLE_MTU_SIZE) ||
       (mtu > GATT_MAX_MTU_SIZE)) {
+    LOG_WARN(
+        "Unable to configure ATT mtu size illegal parameter conn_id:%hu "
+        "mtu:%hu tcb:%s reg:%s",
+        conn_id, mtu, (p_tcb == nullptr) ? "BAD" : "ok",
+        (p_reg == nullptr) ? "BAD" : "ok");
     return GATT_ILLEGAL_PARAMETER;
   }
 
@@ -605,12 +620,15 @@ tGATT_STATUS GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
   }
 
   if (gatt_is_clcb_allocated(conn_id)) {
-    LOG(ERROR) << "GATT_BUSY conn_id = " << +conn_id;
+    LOG_WARN("Connection is already used conn_id:%hu", conn_id);
     return GATT_BUSY;
   }
 
   tGATT_CLCB* p_clcb = gatt_clcb_alloc(conn_id);
-  if (!p_clcb) return GATT_NO_RESOURCES;
+  if (!p_clcb) {
+    LOG_WARN("Unable to allocate connection link control block");
+    return GATT_NO_RESOURCES;
+  }
 
   /* For this request only ATT CID is valid */
   p_clcb->cid = L2CAP_ATT_CID;
@@ -618,6 +636,8 @@ tGATT_STATUS GATTC_ConfigureMTU(uint16_t conn_id, uint16_t mtu) {
   p_clcb->operation = GATTC_OPTYPE_CONFIG;
   tGATT_CL_MSG gatt_cl_msg;
   gatt_cl_msg.mtu = mtu;
+  LOG_DEBUG("Configuring ATT mtu size conn_id:%hu mtu:%hu", conn_id, mtu);
+
   return attp_send_cl_msg(*p_clcb->p_tcb, p_clcb, GATT_REQ_MTU, &gatt_cl_msg);
 }
 
@@ -1100,7 +1120,8 @@ void GATT_StartIf(tGATT_IF gatt_if) {
       p_tcb = gatt_find_tcb_by_addr(bda, transport);
       if (p_reg->app_cb.p_conn_cb && p_tcb) {
         conn_id = GATT_CREATE_CONN_ID(p_tcb->tcb_idx, gatt_if);
-        (*p_reg->app_cb.p_conn_cb)(gatt_if, bda, conn_id, true, 0, transport);
+        (*p_reg->app_cb.p_conn_cb)(gatt_if, bda, conn_id, true,
+                                   GATT_CONN_UNKNOWN, transport);
       }
       start_idx = ++found_idx;
     }
@@ -1133,9 +1154,6 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, bool is_direct,
 bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, bool is_direct,
                   tBT_TRANSPORT transport, bool opportunistic,
                   uint8_t initiating_phys) {
-  LOG(INFO) << __func__ << ": gatt_if=" << +gatt_if << ", address=" << bd_addr
-            << " is_direct=" << std::boolalpha << is_direct << std::noboolalpha;
-
   /* Make sure app is registered */
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
   if (!p_reg) {
@@ -1160,8 +1178,12 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, bool is_direct,
 
   bool ret;
   if (is_direct) {
+    LOG_DEBUG("Starting direct connect gatt_if=%u address=%s", gatt_if,
+              bd_addr.ToString().c_str());
     ret = gatt_act_connect(p_reg, bd_addr, transport, initiating_phys);
   } else {
+    LOG_DEBUG("Starting background connect gatt_if=%u address=%s", gatt_if,
+              bd_addr.ToString().c_str());
     if (!BTM_BackgroundConnectAddressKnown(bd_addr)) {
       //  RPA can rotate, causing address to "expire" in the background
       //  connection list. RPA is allowed for direct connect, as such request

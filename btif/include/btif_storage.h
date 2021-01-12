@@ -24,6 +24,7 @@
 
 #include "bt_target.h"
 #include "bt_types.h"
+#include "types/ble_address_with_type.h"
 
 /*******************************************************************************
  *  Constants & Macros
@@ -237,6 +238,18 @@ void btif_storage_set_gatt_cl_supp_feat(const RawAddress& bd_addr,
 
 /** Get client supported features */
 uint8_t btif_storage_get_gatt_cl_supp_feat(const RawAddress& bd_addr);
+
+/** Remove client supported features */
+void btif_storage_remove_gatt_cl_supp_feat(const RawAddress& bd_addr);
+
+/** Store last server database hash for remote client */
+void btif_storage_set_gatt_cl_db_hash(const RawAddress& bd_addr, Octet16 hash);
+
+/** Get last server database hash for remote client */
+Octet16 btif_storage_get_gatt_cl_db_hash(const RawAddress& bd_addr);
+
+/** Remove last server database hash for remote client */
+void btif_storage_remove_gatt_cl_db_hash(const RawAddress& bd_addr);
 
 /** Get the hearing aid device properties. */
 bool btif_storage_get_hearing_aid_prop(

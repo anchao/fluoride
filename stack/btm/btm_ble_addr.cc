@@ -26,7 +26,6 @@
 #include <string.h>
 
 #include "bt_types.h"
-#include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "gap_api.h"
@@ -36,6 +35,8 @@
 #include "stack/btm/btm_dev.h"
 #include "stack/crypto_toolbox/crypto_toolbox.h"
 #include "stack/include/acl_api.h"
+
+extern tBTM_CB btm_cb;
 
 void btm_ble_set_random_address(const RawAddress& random_bda);
 
@@ -325,11 +326,15 @@ void btm_ble_refresh_peer_resolvable_private_addr(
   }
 
   /* connection refresh remote address */
-  if (!acl_refresh_remote_address(p_sec_rec, p_sec_rec->bd_addr, rra_type,
-                                  rpa)) {
+  const auto& identity_address = p_sec_rec->ble.identity_address_with_type.bda;
+  auto identity_address_type = p_sec_rec->ble.identity_address_with_type.type;
+
+  if (!acl_refresh_remote_address(identity_address, identity_address_type,
+                                  p_sec_rec->bd_addr, rra_type, rpa)) {
     // Try looking up the pseudo random address
-    if (!acl_refresh_remote_address(p_sec_rec, p_sec_rec->ble.pseudo_addr,
-                                    rra_type, rpa)) {
+    if (!acl_refresh_remote_address(identity_address, identity_address_type,
+                                    p_sec_rec->ble.pseudo_addr, rra_type,
+                                    rpa)) {
       LOG_ERROR("%s Unknown device to refresh remote device", __func__);
     }
   }

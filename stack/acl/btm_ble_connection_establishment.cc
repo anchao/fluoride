@@ -16,19 +16,22 @@
  *
  ******************************************************************************/
 
-#include <frameworks/base/core/proto/android/bluetooth/enums.pb.h>
-#include <frameworks/base/core/proto/android/bluetooth/hci/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
+#include <frameworks/proto_logging/stats/enums/bluetooth/hci/enums.pb.h>
 
 #include "bt_types.h"
 #include "btm_int.h"
 #include "common/metrics.h"
 #include "device/include/controller.h"
+#include "stack/btm/btm_ble_int.h"
 #include "stack/gatt/connection_manager.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/ble_acl_interface.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/hcimsgs.h"
 #include "stack/include/l2cap_hci_link_interface.h"
+
+extern tBTM_CB btm_cb;
 
 extern void btm_ble_advertiser_notify_terminated_legacy(
     uint8_t status, uint16_t connection_handle);
@@ -94,7 +97,7 @@ void btm_ble_create_ll_conn_complete(uint8_t status) {
   }
 }
 
-static bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type) {
+bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type) {
   bool is_in_security_db = false;
   tBLE_ADDR_TYPE peer_addr_type = *bda_type;
   bool addr_is_rpa =

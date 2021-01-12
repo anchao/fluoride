@@ -20,25 +20,28 @@
 #define SMP_API_TYPES_H
 
 #include "bt_target.h"
+#include "types/ble_address_with_type.h"
 
 /* SMP command code */
-#define SMP_OPCODE_PAIRING_REQ 0x01
-#define SMP_OPCODE_PAIRING_RSP 0x02
-#define SMP_OPCODE_CONFIRM 0x03
-#define SMP_OPCODE_RAND 0x04
-#define SMP_OPCODE_PAIRING_FAILED 0x05
-#define SMP_OPCODE_ENCRYPT_INFO 0x06
-#define SMP_OPCODE_CENTRAL_ID 0x07
-#define SMP_OPCODE_IDENTITY_INFO 0x08
-#define SMP_OPCODE_ID_ADDR 0x09
-#define SMP_OPCODE_SIGN_INFO 0x0A
-#define SMP_OPCODE_SEC_REQ 0x0B
-#define SMP_OPCODE_PAIR_PUBLIC_KEY 0x0C
-#define SMP_OPCODE_PAIR_DHKEY_CHECK 0x0D
-#define SMP_OPCODE_PAIR_KEYPR_NOTIF 0x0E
-#define SMP_OPCODE_MAX SMP_OPCODE_PAIR_KEYPR_NOTIF
-#define SMP_OPCODE_MIN SMP_OPCODE_PAIRING_REQ
-#define SMP_OPCODE_PAIR_COMMITM 0x0F
+typedef enum : uint8_t {
+  SMP_OPCODE_PAIRING_REQ = 0x01,
+  SMP_OPCODE_PAIRING_RSP = 0x02,
+  SMP_OPCODE_CONFIRM = 0x03,
+  SMP_OPCODE_RAND = 0x04,
+  SMP_OPCODE_PAIRING_FAILED = 0x05,
+  SMP_OPCODE_ENCRYPT_INFO = 0x06,
+  SMP_OPCODE_CENTRAL_ID = 0x07,
+  SMP_OPCODE_IDENTITY_INFO = 0x08,
+  SMP_OPCODE_ID_ADDR = 0x09,
+  SMP_OPCODE_SIGN_INFO = 0x0A,
+  SMP_OPCODE_SEC_REQ = 0x0B,
+  SMP_OPCODE_PAIR_PUBLIC_KEY = 0x0C,
+  SMP_OPCODE_PAIR_DHKEY_CHECK = 0x0D,
+  SMP_OPCODE_PAIR_KEYPR_NOTIF = 0x0E,
+  SMP_OPCODE_MAX = SMP_OPCODE_PAIR_KEYPR_NOTIF,
+  SMP_OPCODE_MIN = SMP_OPCODE_PAIRING_REQ,
+  SMP_OPCODE_PAIR_COMMITM = 0x0F,
+} tSMP_OPCODE;
 
 /* SMP event type */
 #define SMP_IO_CAP_REQ_EVT 1     /* IO capability request event */
@@ -109,21 +112,22 @@ typedef uint8_t tSMP_OOB_FLAG;
 enum { SMP_OOB_INVALID_TYPE, SMP_OOB_PEER, SMP_OOB_LOCAL, SMP_OOB_BOTH };
 typedef uint8_t tSMP_OOB_DATA_TYPE;
 
-#define SMP_AUTH_NO_BOND 0x00
-#define SMP_AUTH_BOND 0x01
-
-/* SMP Authentication requirement */
-#define SMP_AUTH_YN_BIT (1 << 2)
-#define SMP_SC_SUPPORT_BIT (1 << 3)
-#define SMP_KP_SUPPORT_BIT (1 << 4)
-#define SMP_H7_SUPPORT_BIT (1 << 5)
+enum : uint8_t {
+  SMP_AUTH_NO_BOND = 0x00,
+  /* no MITM, No Bonding, encryption only */
+  SMP_AUTH_NB_ENC_ONLY = 0x00,  //(SMP_AUTH_MASK | BTM_AUTH_SP_NO)
+  SMP_AUTH_BOND = (1u << 0),
+  SMP_AUTH_UNUSED = (1u << 1),
+  /* SMP Authentication requirement */
+  SMP_AUTH_YN_BIT = (1u << 2),
+  SMP_SC_SUPPORT_BIT = (1u << 3),
+  SMP_KP_SUPPORT_BIT = (1u << 4),
+  SMP_H7_SUPPORT_BIT = (1u << 5),
+};
 
 #define SMP_AUTH_MASK                                                          \
   (SMP_AUTH_BOND | SMP_AUTH_YN_BIT | SMP_SC_SUPPORT_BIT | SMP_KP_SUPPORT_BIT | \
    SMP_H7_SUPPORT_BIT)
-
-/* no MITM, No Bonding, encryption only */
-#define SMP_AUTH_NB_ENC_ONLY 0x00  //(SMP_AUTH_MASK | BTM_AUTH_SP_NO)
 
 /* Secure Connections, no MITM, no Bonding */
 #define SMP_AUTH_SC_ENC_ONLY (SMP_H7_SUPPORT_BIT | SMP_SC_SUPPORT_BIT)

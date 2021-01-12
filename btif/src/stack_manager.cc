@@ -34,6 +34,7 @@
 #include "osi/include/osi.h"
 #include "osi/include/semaphore.h"
 #include "stack/include/acl_api.h"
+#include "stack/include/btm_client_interface.h"
 #include "stack/include/btu.h"
 
 // Temp includes
@@ -43,7 +44,6 @@
 #include "btif_profile_queue.h"
 #include "internal_include/bt_target.h"
 #include "internal_include/bte.h"
-#include "stack/btm/btm_int.h"
 #include "stack/include/gatt_api.h"
 #include "stack/include/l2c_api.h"
 #include "stack/include/port_api.h"
@@ -74,8 +74,6 @@ void main_thread_shut_down();
 void main_thread_start_up();
 void BTA_dm_on_hw_on();
 void BTA_dm_on_hw_off();
-extern void btm_init(void);
-extern void btm_free(void);
 
 using bluetooth::common::MessageLoopThread;
 
@@ -208,12 +206,12 @@ static void event_start_up_stack(UNUSED_ATTR void* context) {
     module_start_up(get_module(HCI_MODULE));
   }
 
-  btm_init();
+  get_btm_client_interface().lifecycle.btm_init();
   l2c_init();
   sdp_init();
   gatt_init();
   SMP_Init();
-  btm_ble_init();
+  get_btm_client_interface().lifecycle.btm_ble_init();
 
   RFCOMM_Init();
 #if (BNEP_INCLUDED == TRUE)
@@ -295,6 +293,16 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
 
   future_await(local_hack_future);
 
+  main_thread_shut_down();
+
+  module_clean_up(get_module(BTE_LOGMSG_MODULE));
+
+  gatt_free();
+  l2c_free();
+  sdp_free();
+  get_btm_client_interface().lifecycle.btm_ble_free();
+  get_btm_client_interface().lifecycle.btm_free();
+
   if (bluetooth::shim::is_any_gd_enabled()) {
     LOG_INFO("%s Gd shim module disabled", __func__);
     module_shut_down(get_module(GD_SHIM_MODULE));
@@ -303,15 +311,6 @@ static void event_shut_down_stack(UNUSED_ATTR void* context) {
     module_shut_down(get_module(HCI_MODULE));
     module_shut_down(get_module(BTSNOOP_MODULE));
   }
-
-  main_thread_shut_down();
-
-  module_clean_up(get_module(BTE_LOGMSG_MODULE));
-
-  gatt_free();
-  l2c_free();
-  sdp_free();
-  btm_free();
 
   module_shut_down(get_module(CONTROLLER_MODULE));  // Doesn't do any work, just
                                                     // puts it in a restartable

@@ -18,9 +18,12 @@
 
 #pragma once
 
+#include <base/strings/stringprintf.h>
 #include <cstdint>
+#include <string>
 
 #include "gd/crypto_toolbox/crypto_toolbox.h"
+#include "main/shim/dumpsys.h"
 #include "osi/include/alarm.h"
 #include "stack/include/btm_api_types.h"
 #include "types/raw_address.h"
@@ -149,6 +152,20 @@ typedef enum : uint8_t {
   BTM_SEC_STATE_DISCONNECTING_BOTH = 9,
 } tSECURITY_STATE;
 
+typedef enum : uint8_t {
+  BTM_SM4_UNKNOWN = 0x00,
+  BTM_SM4_KNOWN = 0x10,
+  BTM_SM4_TRUE = 0x11,
+  BTM_SM4_REQ_PEND = 0x08, /* set this bit when getting remote features */
+  BTM_SM4_UPGRADE = 0x04,  /* set this bit when upgrading link key */
+  BTM_SM4_RETRY = 0x02,    /* set this bit to retry on HCI_ERR_KEY_MISSING or \
+                              HCI_ERR_LMP_ERR_TRANS_COLLISION */
+  BTM_SM4_DD_ACP =
+      0x20, /* set this bit to indicate peer initiated dedicated bonding */
+  BTM_SM4_CONN_PEND = 0x40, /* set this bit to indicate accepting acl conn; to
+                             be cleared on \ btm_acl_created */
+} tBTM_SM4_BIT;
+
 /*
  * Define structure for Security Device Record.
  * A record exists for each device authenticated with this device
@@ -180,8 +197,8 @@ typedef struct {
                                uint8_t pin_len, uint8_t* p_pin);
   friend void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status);
   friend void btm_sec_connected(const RawAddress& bda, uint16_t handle,
-                                uint8_t status, uint8_t enc_mode);
-  friend void btm_sec_encrypt_change(uint16_t handle, uint8_t status,
+                                tHCI_STATUS status, uint8_t enc_mode);
+  friend void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status,
                                      uint8_t encr_enable);
   friend void btm_sec_link_key_notification(const RawAddress& p_bda,
                                             const Octet16& link_key,
@@ -259,9 +276,6 @@ typedef struct {
 
   tBTM_BD_NAME sec_bd_name; /* User friendly name of the device. (may be
                                truncated to save space in dev_rec table) */
-  BD_FEATURES feature_pages[HCI_EXT_FEATURES_PAGE_MAX +
-                            1]; /* Features supported by the device */
-  uint8_t num_read_pages;
 
   uint8_t sec_state;          /* Operating state                    */
   bool is_security_state_idle() const {
@@ -302,27 +316,26 @@ typedef struct {
                              name */
   uint8_t link_key_type;  /* Type of key used in pairing   */
 
-#define BTM_SM4_UNKNOWN 0x00
-#define BTM_SM4_KNOWN 0x10
-#define BTM_SM4_TRUE 0x11
-#define BTM_SM4_REQ_PEND 0x08 /* set this bit when getting remote features */
-#define BTM_SM4_UPGRADE 0x04  /* set this bit when upgrading link key */
-#define BTM_SM4_RETRY                                     \
-  0x02 /* set this bit to retry on HCI_ERR_KEY_MISSING or \
-          HCI_ERR_LMP_ERR_TRANS_COLLISION */
-#define BTM_SM4_DD_ACP \
-  0x20 /* set this bit to indicate peer initiated dedicated bonding */
-#define BTM_SM4_CONN_PEND                                               \
-  0x40 /* set this bit to indicate accepting acl conn; to be cleared on \
-          btm_acl_created */
   uint8_t sm4;                /* BTM_SM4_TRUE, if the peer supports SM4 */
   tBTM_IO_CAP rmt_io_caps;    /* IO capability of the peer device */
   tBTM_AUTH_REQ rmt_auth_req; /* the auth_req flag as in the IO caps rsp evt */
+
   bool remote_supports_secure_connections;
+  friend void btm_sec_set_peer_sec_caps(uint16_t hci_handle, bool ssp_supported,
+                                        bool sc_supported,
+                                        bool hci_role_switch_supported);
+
+ public:
+  bool SupportsSecureConnections() const {
+    return remote_supports_secure_connections;
+  }
+
   bool remote_features_needed; /* set to true if the local device is in */
   /* "Secure Connections Only" mode and it receives */
   /* HCI_IO_CAPABILITY_REQUEST_EVT from the peer before */
   /* it knows peer's support for Secure Connections */
+  bool remote_supports_hci_role_switch = false;
+  bool remote_feature_received = false;
 
   uint16_t ble_hci_handle; /* use in DUMO connection */
   uint16_t get_ble_hci_handle() const { return ble_hci_handle; }
@@ -356,18 +369,11 @@ typedef struct {
   tBTM_SEC_BLE ble;
   tBTM_LE_CONN_PRAMS conn_params;
 
-#define BTM_SEC_RS_NOT_PENDING 0 /* Role Switch not in progress */
-#define BTM_SEC_RS_PENDING 1     /* Role Switch in progress */
-#define BTM_SEC_DISC_PENDING 2   /* Disconnect is pending */
-  uint8_t rs_disc_pending;
-  bool is_role_switch_idle() const {
-    return rs_disc_pending == BTM_SEC_RS_NOT_PENDING;
-  }
-  bool is_role_switch_pending() const {
-    return rs_disc_pending == BTM_SEC_RS_PENDING;
-  }
-  bool is_role_switch_disconnecting() const {
-    return rs_disc_pending == BTM_SEC_DISC_PENDING;
+  std::string ToString() const {
+    return base::StringPrintf(
+        "%s %6s name:\"%s\" supports_SC:%s", PRIVATE_ADDRESS(bd_addr),
+        DeviceTypeText(device_type).c_str(), sec_bd_name,
+        logbool(remote_supports_secure_connections).c_str());
   }
 
 } tBTM_SEC_DEV_REC;

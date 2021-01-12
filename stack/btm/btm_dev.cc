@@ -30,7 +30,6 @@
 #include "bt_common.h"
 #include "bt_types.h"
 #include "btm_api.h"
-#include "btm_int.h"
 #include "btu.h"
 #include "device/include/controller.h"
 #include "hcidefs.h"
@@ -40,6 +39,8 @@
 #include "main/shim/shim.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/include/acl_api.h"
+
+extern tBTM_CB btm_cb;
 
 /*******************************************************************************
  *
@@ -97,24 +98,6 @@ bool BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class,
     p_dev_rec->sec_flags |= BTM_SEC_NAME_KNOWN;
     strlcpy((char*)p_dev_rec->sec_bd_name, (char*)bd_name,
             BTM_MAX_REM_BD_NAME_LEN + 1);
-  }
-
-  p_dev_rec->num_read_pages = 0;
-  if (features) {
-    bool found = false;
-    memcpy(p_dev_rec->feature_pages, features,
-           sizeof(p_dev_rec->feature_pages));
-    for (int i = HCI_EXT_FEATURES_PAGE_MAX; !found && i >= 0; i--) {
-      for (int j = 0; j < HCI_FEATURE_BYTES_PER_PAGE; j++) {
-        if (p_dev_rec->feature_pages[i][j] != 0) {
-          found = true;
-          p_dev_rec->num_read_pages = i + 1;
-          break;
-        }
-      }
-    }
-  } else {
-    memset(p_dev_rec->feature_pages, 0, sizeof(p_dev_rec->feature_pages));
   }
 
   if (p_link_key) {
@@ -233,8 +216,7 @@ tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& bd_addr) {
 
   tBTM_SEC_DEV_REC* p_dev_rec = btm_sec_allocate_dev_rec();
 
-  BTM_TRACE_EVENT("%s: allocated p_dev_rec=%p, bd_addr=%s", __func__, p_dev_rec,
-                  bd_addr.ToString().c_str());
+  LOG_DEBUG("Allocated device record bd_addr:%s", PRIVATE_ADDRESS(bd_addr));
 
   /* Check with the BT manager if details about remote device are known */
   /* outgoing connection */
@@ -289,21 +271,12 @@ bool btm_dev_support_role_switch(const RawAddress& bd_addr) {
     return false;
   }
 
-  if (HCI_SWITCH_SUPPORTED(p_dev_rec->feature_pages[0])) {
+  if (p_dev_rec->remote_supports_hci_role_switch) {
     BTM_TRACE_DEBUG("%s Peer controller supports role switch", __func__);
     return true;
   }
 
-  /* If the feature field is all zero, we never received them */
-  bool feature_empty = true;
-  for (int xx = 0; xx < BD_FEATURES_LEN; xx++) {
-    if (p_dev_rec->feature_pages[0][xx] != 0x00) {
-      feature_empty = false; /* at least one is != 0 */
-      break;
-    }
-  }
-
-  if (feature_empty) {
+  if (!p_dev_rec->remote_feature_received) {
     BTM_TRACE_DEBUG(
         "%s Unknown peer capabilities, assuming peer supports role switch",
         __func__);

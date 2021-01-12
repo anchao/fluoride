@@ -83,6 +83,9 @@ void LinkManager::ConnectFixedChannelServices(hci::Address device,
 
 void LinkManager::ConnectDynamicChannelServices(
     hci::Address device, Link::PendingDynamicChannelConnection pending_dynamic_channel_connection, Psm psm) {
+  if (!IsPsmValid(psm)) {
+    return;
+  }
   auto* link = GetLink(device);
   if (link == nullptr) {
     acl_manager_->CreateConnection(device);
@@ -109,6 +112,15 @@ void LinkManager::InitiateConnectionForSecurity(hci::Address remote) {
 void LinkManager::RegisterLinkSecurityInterfaceListener(os::Handler* handler, LinkSecurityInterfaceListener* listener) {
   link_security_interface_listener_handler_ = handler;
   link_security_interface_listener_ = listener;
+}
+
+LinkSecurityInterfaceListener* LinkManager::GetLinkSecurityInterfaceListener() {
+  return link_security_interface_listener_;
+}
+
+void LinkManager::RegisterLinkPropertyListener(os::Handler* handler, LinkPropertyListener* listener) {
+  link_property_callback_handler_ = handler;
+  link_property_listener_ = listener;
 }
 
 Link* LinkManager::GetLink(const hci::Address device) {
@@ -170,7 +182,10 @@ void LinkManager::handle_link_security_ensure_encrypted(hci::Address remote) {
 class LinkSecurityInterfaceImpl : public LinkSecurityInterface {
  public:
   LinkSecurityInterfaceImpl(os::Handler* handler, LinkManager* link_manager, Link* link)
-      : handler_(handler), link_manager_(link_manager), remote_(link->GetDevice().GetAddress()) {}
+      : handler_(handler),
+        link_manager_(link_manager),
+        remote_(link->GetDevice().GetAddress()),
+        acl_handle_(link->GetAclHandle()) {}
 
   hci::Address GetRemoteAddress() override {
     return remote_;
@@ -196,9 +211,18 @@ class LinkSecurityInterfaceImpl : public LinkSecurityInterface {
     handler_->CallOn(link_manager_, &LinkManager::handle_link_security_ensure_encrypted, remote_);
   }
 
+  uint16_t GetAclHandle() override {
+    return acl_handle_;
+  }
+
+  hci::Role GetRole() override {
+    return link_manager_->GetLink(remote_)->GetRole();
+  }
+
   os::Handler* handler_;
   LinkManager* link_manager_;
   hci::Address remote_;
+  uint16_t acl_handle_;
 };
 
 void LinkManager::OnConnectSuccess(std::unique_ptr<hci::acl_manager::ClassicAclConnection> acl_connection) {
@@ -212,6 +236,9 @@ void LinkManager::OnConnectSuccess(std::unique_ptr<hci::acl_manager::ClassicAclC
   ASSERT(link != nullptr);
   link->SendInformationRequest(InformationRequestInfoType::EXTENDED_FEATURES_SUPPORTED);
   link->SendInformationRequest(InformationRequestInfoType::FIXED_CHANNELS_SUPPORTED);
+  link->ReadRemoteVersionInformation();
+  link->ReadRemoteSupportedFeatures();
+  link->ReadRemoteExtendedFeatures(1);
 
   // Allocate and distribute channels for all registered fixed channel services
   auto fixed_channel_services = fixed_channel_service_manager_->GetRegisteredServices();
@@ -227,6 +254,12 @@ void LinkManager::OnConnectSuccess(std::unique_ptr<hci::acl_manager::ClassicAclC
     pending_dynamic_channels_.erase(device);
     pending_dynamic_channels_callbacks_.erase(device);
   }
+  // Notify link property listener
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_, &LinkPropertyListener::OnLinkConnected, device, link->GetAclHandle());
+  }
+
   // Notify security manager
   if (link_security_interface_listener_handler_ != nullptr) {
     link_security_interface_listener_handler_->CallOn(
@@ -277,6 +310,10 @@ void LinkManager::OnDisconnect(hci::Address device, hci::ErrorCode status) {
     link_security_interface_listener_handler_->CallOn(
         link_security_interface_listener_, &LinkSecurityInterfaceListener::OnLinkDisconnected, device);
   }
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(link_property_listener_, &LinkPropertyListener::OnLinkDisconnected, device);
+  }
+
   links_.erase(device);
 }
 
@@ -286,6 +323,7 @@ void LinkManager::OnAuthenticationComplete(hci::Address device) {
         link_security_interface_listener_, &LinkSecurityInterfaceListener::OnAuthenticationComplete, device);
   }
 }
+
 void LinkManager::OnEncryptionChange(hci::Address device, hci::EncryptionEnabled enabled) {
   if (link_security_interface_listener_handler_ != nullptr) {
     link_security_interface_listener_handler_->CallOn(
@@ -293,6 +331,70 @@ void LinkManager::OnEncryptionChange(hci::Address device, hci::EncryptionEnabled
         &LinkSecurityInterfaceListener::OnEncryptionChange,
         device,
         enabled == hci::EncryptionEnabled::ON || enabled == hci::EncryptionEnabled::BR_EDR_AES_CCM);
+  }
+}
+
+void LinkManager::OnReadRemoteVersionInformation(
+    hci::Address device, uint8_t lmp_version, uint16_t manufacturer_name, uint16_t sub_version) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_,
+        &LinkPropertyListener::OnReadRemoteVersionInformation,
+        device,
+        lmp_version,
+        manufacturer_name,
+        sub_version);
+  }
+}
+
+void LinkManager::OnReadRemoteExtendedFeatures(
+    hci::Address device, uint8_t page_number, uint8_t max_page_number, uint64_t features) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_,
+        &LinkPropertyListener::OnReadRemoteExtendedFeatures,
+        device,
+        page_number,
+        max_page_number,
+        features);
+  }
+}
+
+void LinkManager::OnRoleChange(hci::Address remote, hci::Role role) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(link_property_listener_, &LinkPropertyListener::OnRoleChange, remote, role);
+  }
+}
+
+void LinkManager::OnReadClockOffset(hci::Address remote, uint16_t clock_offset) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_, &LinkPropertyListener::OnReadClockOffset, remote, clock_offset);
+  }
+}
+
+void LinkManager::OnModeChange(hci::Address remote, hci::Mode mode, uint16_t interval) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_, &LinkPropertyListener::OnModeChange, remote, mode, interval);
+  }
+}
+
+void LinkManager::OnSniffSubrating(
+    hci::Address remote,
+    uint16_t max_tx_lat,
+    uint16_t max_rx_lat,
+    uint16_t min_remote_timeout,
+    uint16_t min_local_timeout) {
+  if (link_property_callback_handler_ != nullptr) {
+    link_property_callback_handler_->CallOn(
+        link_property_listener_,
+        &LinkPropertyListener::OnSniffSubrating,
+        remote,
+        max_tx_lat,
+        max_rx_lat,
+        min_remote_timeout,
+        min_local_timeout);
   }
 }
 

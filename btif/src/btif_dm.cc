@@ -72,7 +72,6 @@
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_int.h"
 #include "stack/btm/btm_sec.h"
 #include "stack_config.h"
 
@@ -404,16 +403,10 @@ bool check_cod_hid(const RawAddress* remote_bdaddr) {
  *
  ******************************************************************************/
 bool check_sdp_bl(const RawAddress* remote_bdaddr) {
-  uint16_t manufacturer = 0;
-  uint8_t lmp_ver = 0;
-  uint16_t lmp_subver = 0;
   bt_property_t prop_name;
   bt_remote_version_t info;
 
   if (remote_bdaddr == NULL) return false;
-
-  /* fetch additional info about remote device used in iop query */
-  BTM_ReadRemoteVersion(*remote_bdaddr, &lmp_ver, &manufacturer, &lmp_subver);
 
   /* if not available yet, try fetching from config database */
   BTIF_STORAGE_FILL_PROPERTY(&prop_name, BT_PROPERTY_REMOTE_VERSION_INFO,
@@ -423,7 +416,7 @@ bool check_sdp_bl(const RawAddress* remote_bdaddr) {
       BT_STATUS_SUCCESS) {
     return false;
   }
-  manufacturer = info.manufacturer;
+  uint16_t manufacturer = info.manufacturer;
 
   for (unsigned int i = 0; i < ARRAY_SIZE(sdp_blacklist); i++) {
     if (manufacturer == sdp_blacklist[i].manufact_id) return true;
@@ -484,16 +477,17 @@ static void btif_update_remote_version_property(RawAddress* p_bd) {
   uint8_t lmp_ver = 0;
   uint16_t lmp_subver = 0;
   uint16_t mfct_set = 0;
-  tBTM_STATUS btm_status;
+  bool version_info_valid = false;
   bt_remote_version_t info;
   bt_status_t status;
 
-  btm_status = BTM_ReadRemoteVersion(*p_bd, &lmp_ver, &mfct_set, &lmp_subver);
+  version_info_valid =
+      BTM_ReadRemoteVersion(*p_bd, &lmp_ver, &mfct_set, &lmp_subver);
 
   LOG_INFO("remote version info [%s]: %x, %x, %x", p_bd->ToString().c_str(),
            lmp_ver, mfct_set, lmp_subver);
 
-  if (btm_status == BTM_SUCCESS) {
+  if (version_info_valid) {
     // Always update cache to ensure we have availability whenever BTM API is
     // not populated
     info.manufacturer = mfct_set;
@@ -1241,6 +1235,11 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event,
   }
 }
 
+/* Returns true if |uuid| should be passed as device property */
+static bool btif_is_interesting_le_service(bluetooth::Uuid uuid) {
+  return uuid.As16Bit() == UUID_SERVCLASS_LE_HID || uuid == UUID_HEARING_AID;
+}
+
 /*******************************************************************************
  *
  * Function         btif_dm_search_services_evt
@@ -1339,45 +1338,52 @@ static void btif_dm_search_services_evt(tBTA_DM_SEARCH_EVT event,
       break;
 
     case BTA_DM_DISC_BLE_RES_EVT: {
-      LOG_VERBOSE("service %s",
-                  p_data->disc_ble_res.service.ToString().c_str());
       int num_properties = 0;
-      if (p_data->disc_ble_res.service.As16Bit() == UUID_SERVCLASS_LE_HID ||
-          p_data->disc_ble_res.service == UUID_HEARING_AID) {
-        LOG_INFO("Found HOGP or HEARING AID UUID");
-        bt_property_t prop[2];
-        bt_status_t ret;
+      bt_property_t prop[2];
+      std::vector<uint8_t> property_value;
+      int num_uuids = 0;
 
-        const auto& arr = p_data->disc_ble_res.service.To128BitBE();
-
-        RawAddress& bd_addr = p_data->disc_ble_res.bd_addr;
-        prop[0].type = BT_PROPERTY_UUIDS;
-        prop[0].val = (void*)arr.data();
-        prop[0].len = Uuid::kNumBytes128;
-
-        /* Also write this to the NVRAM */
-        ret = btif_storage_set_remote_device_property(&bd_addr, &prop[0]);
-        ASSERTC(ret == BT_STATUS_SUCCESS, "storing remote services failed",
-                ret);
-        num_properties++;
-
-        /* Remote name update */
-        if (strnlen((const char*)p_data->disc_ble_res.bd_name, BD_NAME_LEN)) {
-          prop[1].type = BT_PROPERTY_BDNAME;
-          prop[1].val = p_data->disc_ble_res.bd_name;
-          prop[1].len =
-              strnlen((char*)p_data->disc_ble_res.bd_name, BD_NAME_LEN);
-
-          ret = btif_storage_set_remote_device_property(&bd_addr, &prop[1]);
-          ASSERTC(ret == BT_STATUS_SUCCESS,
-                  "failed to save remote device property", ret);
-          num_properties++;
+      for (Uuid uuid : *p_data->disc_ble_res.services) {
+        LOG_VERBOSE("service %s", uuid.ToString().c_str());
+        if (btif_is_interesting_le_service(uuid)) {
+          num_uuids++;
+          auto valAsBe = uuid.To128BitBE();
+          property_value.insert(property_value.end(), valAsBe.begin(),
+                                valAsBe.end());
         }
-
-        /* Send the event to the BTIF */
-        invoke_remote_device_properties_cb(BT_STATUS_SUCCESS, bd_addr,
-                                           num_properties, prop);
       }
+
+      if (num_uuids == 0) {
+        LOG_INFO("No well known BLE services discovered");
+        return;
+      }
+
+      RawAddress& bd_addr = p_data->disc_ble_res.bd_addr;
+      prop[0].type = BT_PROPERTY_UUIDS;
+      prop[0].val = (void*)property_value.data();
+      prop[0].len = Uuid::kNumBytes128 * num_uuids;
+
+      /* Also write this to the NVRAM */
+      bt_status_t ret =
+          btif_storage_set_remote_device_property(&bd_addr, &prop[0]);
+      ASSERTC(ret == BT_STATUS_SUCCESS, "storing remote services failed", ret);
+      num_properties++;
+
+      /* Remote name update */
+      if (strnlen((const char*)p_data->disc_ble_res.bd_name, BD_NAME_LEN)) {
+        prop[1].type = BT_PROPERTY_BDNAME;
+        prop[1].val = p_data->disc_ble_res.bd_name;
+        prop[1].len = strnlen((char*)p_data->disc_ble_res.bd_name, BD_NAME_LEN);
+
+        ret = btif_storage_set_remote_device_property(&bd_addr, &prop[1]);
+        ASSERTC(ret == BT_STATUS_SUCCESS,
+                "failed to save remote device property", ret);
+        num_properties++;
+      }
+
+      /* Send the event to the BTIF */
+      invoke_remote_device_properties_cb(BT_STATUS_SUCCESS, bd_addr,
+                                         num_properties, prop);
     } break;
 
     default: { ASSERTC(0, "unhandled search services event", event); } break;
@@ -2256,7 +2262,7 @@ void btif_dm_proc_loc_oob(bool valid, const Octet16& c, const Octet16& r) {
 bool btif_dm_get_smp_config(tBTE_APPL_CFG* p_cfg) {
   const std::string* recv = stack_config_get_interface()->get_pts_smp_options();
   if (!recv) {
-    BTIF_TRACE_DEBUG("%s: SMP options not found in configuration", __func__);
+    LOG_DEBUG("SMP pairing options not found in stack configuration");
     return false;
   }
 

@@ -134,6 +134,92 @@ void gatt_dequeue_sr_cmd(tGATT_TCB& tcb, uint16_t cid) {
   fixed_queue_free(p_cmd->multi_rsp_q, NULL);
   memset(p_cmd, 0, sizeof(tGATT_SR_CMD));
 }
+
+static void build_read_multi_rsp(tGATT_SR_CMD* p_cmd, uint16_t mtu) {
+  uint16_t ii, total_len, len;
+  uint8_t* p;
+  bool is_overflow = false;
+
+  len = sizeof(BT_HDR) + L2CAP_MIN_OFFSET + mtu;
+  BT_HDR* p_buf = (BT_HDR*)osi_calloc(len);
+  p_buf->offset = L2CAP_MIN_OFFSET;
+  p = (uint8_t*)(p_buf + 1) + p_buf->offset;
+
+  /* First byte in the response is the opcode */
+  if (p_cmd->multi_req.variable_len)
+    *p++ = GATT_RSP_READ_MULTI_VAR;
+  else
+    *p++ = GATT_RSP_READ_MULTI;
+
+  p_buf->len = 1;
+
+  /* Now walk through the buffers putting the data into the response in order
+   */
+  list_t* list = NULL;
+  const list_node_t* node = NULL;
+  if (!fixed_queue_is_empty(p_cmd->multi_rsp_q))
+    list = fixed_queue_get_list(p_cmd->multi_rsp_q);
+  for (ii = 0; ii < p_cmd->multi_req.num_handles; ii++) {
+    tGATTS_RSP* p_rsp = NULL;
+
+    if (list != NULL) {
+      if (ii == 0)
+        node = list_begin(list);
+      else
+        node = list_next(node);
+      if (node != list_end(list)) p_rsp = (tGATTS_RSP*)list_node(node);
+    }
+
+    if (p_rsp != NULL) {
+      total_len = (p_buf->len + p_rsp->attr_value.len);
+
+      if (total_len > mtu) {
+        /* just send the partial response for the overflow case */
+        len = p_rsp->attr_value.len - (total_len - mtu);
+        is_overflow = true;
+        VLOG(1) << StringPrintf(
+            "multi read overflow available len=%d val_len=%d", len,
+            p_rsp->attr_value.len);
+      } else {
+        len = p_rsp->attr_value.len;
+      }
+
+      if (p_cmd->multi_req.variable_len) {
+        UINT16_TO_STREAM(p, len);
+        p_buf->len += 2;
+      }
+
+      if (p_rsp->attr_value.handle == p_cmd->multi_req.handles[ii]) {
+        memcpy(p, p_rsp->attr_value.value, len);
+        if (!is_overflow) p += len;
+        p_buf->len += len;
+      } else {
+        p_cmd->status = GATT_NOT_FOUND;
+        break;
+      }
+
+      if (is_overflow) break;
+
+    } else {
+      p_cmd->status = GATT_NOT_FOUND;
+      break;
+    }
+
+  } /* loop through all handles*/
+
+  /* Sanity check on the buffer length */
+  if (p_buf->len == 0) {
+    LOG(ERROR) << __func__ << " nothing found!!";
+    p_cmd->status = GATT_NOT_FOUND;
+    osi_free(p_buf);
+    VLOG(1) << __func__ << "osi_free(p_buf)";
+  } else if (p_cmd->p_rsp_msg != NULL) {
+    osi_free(p_buf);
+  } else {
+    p_cmd->p_rsp_msg = p_buf;
+  }
+}
+
 /*******************************************************************************
  *
  * Function         process_read_multi_rsp
@@ -145,10 +231,6 @@ void gatt_dequeue_sr_cmd(tGATT_TCB& tcb, uint16_t cid) {
  ******************************************************************************/
 static bool process_read_multi_rsp(tGATT_SR_CMD* p_cmd, tGATT_STATUS status,
                                    tGATTS_RSP* p_msg, uint16_t mtu) {
-  uint16_t ii, total_len, len;
-  uint8_t* p;
-  bool is_overflow = false;
-
   VLOG(1) << StringPrintf("%s status=%d mtu=%d", __func__, status, mtu);
 
   if (p_cmd->multi_rsp_q == NULL)
@@ -162,80 +244,12 @@ static bool process_read_multi_rsp(tGATT_SR_CMD* p_cmd, tGATT_STATUS status,
   p_cmd->status = status;
   if (status == GATT_SUCCESS) {
     VLOG(1) << "Multi read count=" << fixed_queue_length(p_cmd->multi_rsp_q)
-            << " num_hdls=" << p_cmd->multi_req.num_handles;
+            << " num_hdls=" << p_cmd->multi_req.num_handles
+            << " variable=" << p_cmd->multi_req.variable_len;
     /* Wait till we get all the responses */
     if (fixed_queue_length(p_cmd->multi_rsp_q) ==
         p_cmd->multi_req.num_handles) {
-      len = sizeof(BT_HDR) + L2CAP_MIN_OFFSET + mtu;
-      p_buf = (BT_HDR*)osi_calloc(len);
-      p_buf->offset = L2CAP_MIN_OFFSET;
-      p = (uint8_t*)(p_buf + 1) + p_buf->offset;
-
-      /* First byte in the response is the opcode */
-      *p++ = GATT_RSP_READ_MULTI;
-      p_buf->len = 1;
-
-      /* Now walk through the buffers puting the data into the response in order
-       */
-      list_t* list = NULL;
-      const list_node_t* node = NULL;
-      if (!fixed_queue_is_empty(p_cmd->multi_rsp_q))
-        list = fixed_queue_get_list(p_cmd->multi_rsp_q);
-      for (ii = 0; ii < p_cmd->multi_req.num_handles; ii++) {
-        tGATTS_RSP* p_rsp = NULL;
-
-        if (list != NULL) {
-          if (ii == 0)
-            node = list_begin(list);
-          else
-            node = list_next(node);
-          if (node != list_end(list)) p_rsp = (tGATTS_RSP*)list_node(node);
-        }
-
-        if (p_rsp != NULL) {
-          total_len = (p_buf->len + p_rsp->attr_value.len);
-
-          if (total_len > mtu) {
-            /* just send the partial response for the overflow case */
-            len = p_rsp->attr_value.len - (total_len - mtu);
-            is_overflow = true;
-            VLOG(1) << StringPrintf(
-                "multi read overflow available len=%d val_len=%d", len,
-                p_rsp->attr_value.len);
-          } else {
-            len = p_rsp->attr_value.len;
-          }
-
-          if (p_rsp->attr_value.handle == p_cmd->multi_req.handles[ii]) {
-            memcpy(p, p_rsp->attr_value.value, len);
-            if (!is_overflow) p += len;
-            p_buf->len += len;
-          } else {
-            p_cmd->status = GATT_NOT_FOUND;
-            break;
-          }
-
-          if (is_overflow) break;
-
-        } else {
-          p_cmd->status = GATT_NOT_FOUND;
-          break;
-        }
-
-      } /* loop through all handles*/
-
-      /* Sanity check on the buffer length */
-      if (p_buf->len == 0) {
-        LOG(ERROR) << __func__ << " nothing found!!";
-        p_cmd->status = GATT_NOT_FOUND;
-        osi_free(p_buf);
-        VLOG(1) << __func__ << "osi_free(p_buf)";
-      } else if (p_cmd->p_rsp_msg != NULL) {
-        osi_free(p_buf);
-      } else {
-        p_cmd->p_rsp_msg = p_buf;
-      }
-
+      build_read_multi_rsp(p_cmd, mtu);
       return (true);
     }
   } else /* any handle read exception occurs, return error */
@@ -269,7 +283,8 @@ tGATT_STATUS gatt_sr_process_app_rsp(tGATT_TCB& tcb, tGATT_IF gatt_if,
 
   gatt_sr_update_cback_cnt(tcb, sr_res_p->cid, gatt_if, false, false);
 
-  if (op_code == GATT_REQ_READ_MULTI) {
+  if ((op_code == GATT_REQ_READ_MULTI) ||
+      (op_code == GATT_REQ_READ_MULTI_VAR)) {
     /* If no error and still waiting, just return */
     if (!process_read_multi_rsp(sr_res_p, status, p_msg, payload_size))
       return (GATT_SUCCESS);
@@ -396,6 +411,7 @@ void gatt_process_read_multi_req(tGATT_TCB& tcb, uint16_t cid, uint8_t op_code,
 
   tGATT_READ_MULTI* multi_req = gatt_sr_get_read_multi(tcb, cid);
   multi_req->num_handles = 0;
+  multi_req->variable_len = (op_code == GATT_REQ_READ_MULTI_VAR);
   gatt_sr_get_sec_info(tcb.peer_bda, tcb.transport, &sec_flag, &key_size);
 
 #if (GATT_CONFORMANCE_TESTING == TRUE)
@@ -1190,6 +1206,9 @@ static bool gatts_proc_ind_ack(tGATT_TCB& tcb, uint16_t ack_handle) {
     /* there is no need to inform the application since srv chg is handled
      * internally by GATT */
     continue_processing = false;
+
+    // After receiving ack of svc_chg_ind, reset client status
+    gatt_sr_update_cl_status(tcb, /* chg_aware= */ true);
   }
 
   gatts_chk_pending_ind(tcb);
@@ -1232,6 +1251,80 @@ void gatts_process_value_conf(tGATT_TCB& tcb, uint16_t cid, uint8_t op_code) {
   }
 }
 
+static bool gatts_process_db_out_of_sync(tGATT_TCB& tcb, uint16_t cid,
+                                         uint8_t op_code, uint16_t len,
+                                         uint8_t* p_data) {
+  if (gatt_sr_is_cl_change_aware(tcb)) return false;
+
+  // default value
+  bool should_ignore = true;
+  bool should_rsp = true;
+
+  switch (op_code) {
+    case GATT_REQ_READ_BY_TYPE: {
+      // Check if read database hash by UUID
+      Uuid uuid = Uuid::kEmpty;
+      uint16_t s_hdl = 0, e_hdl = 0;
+      uint16_t db_hash_handle = gatt_cb.handle_of_database_hash;
+      tGATT_STATUS reason = gatts_validate_packet_format(op_code, len, p_data,
+                                                         &uuid, s_hdl, e_hdl);
+      if (reason == GATT_SUCCESS &&
+          (s_hdl <= db_hash_handle && db_hash_handle <= e_hdl) &&
+          (uuid == Uuid::From16Bit(GATT_UUID_DATABASE_HASH)))
+        should_ignore = false;
+
+    } break;
+    case GATT_REQ_READ: {
+      // Check if read database hash by handle
+      uint16_t handle = 0;
+      uint8_t* p = p_data;
+      tGATT_STATUS status = GATT_SUCCESS;
+
+      if (len < 2) {
+        status = GATT_INVALID_PDU;
+      } else {
+        STREAM_TO_UINT16(handle, p);
+        len -= 2;
+      }
+
+      if (status == GATT_SUCCESS && handle == gatt_cb.handle_of_database_hash)
+        should_ignore = false;
+
+    } break;
+    case GATT_REQ_READ_BY_GRP_TYPE: /* discover primary services */
+    case GATT_REQ_FIND_TYPE_VALUE:  /* discover service by UUID */
+    case GATT_REQ_FIND_INFO:        /* discover char descrptor */
+    case GATT_REQ_READ_BLOB:        /* read long char */
+    case GATT_REQ_READ_MULTI:       /* read multi char*/
+    case GATT_REQ_WRITE:            /* write char/char descriptor value */
+    case GATT_REQ_PREPARE_WRITE:    /* write long char */
+      // Use default value
+      break;
+    case GATT_CMD_WRITE:      /* cmd */
+    case GATT_SIGN_CMD_WRITE: /* sign cmd */
+      should_rsp = false;
+      break;
+    case GATT_REQ_MTU:           /* configure mtu */
+    case GATT_REQ_EXEC_WRITE:    /* execute write */
+    case GATT_HANDLE_VALUE_CONF: /* confirm for indication */
+    default:
+      should_ignore = false;
+  }
+
+  if (should_ignore) {
+    if (should_rsp) {
+      gatt_send_error_rsp(tcb, cid, GATT_DATABASE_OUT_OF_SYNC, op_code, 0x0000,
+                          false);
+    }
+    LOG(INFO) << __func__ << ": database out of sync, device=" << tcb.peer_bda
+              << ", op_code=" << loghex((uint16_t)op_code)
+              << ", should_rsp=" << should_rsp;
+    gatt_sr_update_cl_status(tcb, /* chg_aware= */ should_rsp);
+  }
+
+  return should_ignore;
+}
+
 /** This function is called to handle the client requests to server */
 void gatt_server_handle_client_req(tGATT_TCB& tcb, uint16_t cid,
                                    uint8_t op_code, uint16_t len,
@@ -1254,6 +1347,9 @@ void gatt_server_handle_client_req(tGATT_TCB& tcb, uint16_t cid,
     }
     /* otherwise, ignore the pkt */
   } else {
+    // handle database out of sync
+    if (gatts_process_db_out_of_sync(tcb, cid, op_code, len, p_data)) return;
+
     switch (op_code) {
       case GATT_REQ_READ_BY_GRP_TYPE: /* discover primary services */
       case GATT_REQ_FIND_TYPE_VALUE:  /* discover service by UUID */
@@ -1292,6 +1388,7 @@ void gatt_server_handle_client_req(tGATT_TCB& tcb, uint16_t cid,
         break;
 
       case GATT_REQ_READ_MULTI:
+      case GATT_REQ_READ_MULTI_VAR:
         gatt_process_read_multi_req(tcb, cid, op_code, len, p_data);
         break;
 

@@ -31,8 +31,10 @@
 #include "btm_api.h"
 #include "device/include/controller.h"
 #include "device/include/esco_parameters.h"
+#include "main/shim/dumpsys.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
+#include "stack/btm/btm_sco.h"
 #include "stack/include/btu.h"
 #include "utl.h"
 
@@ -159,21 +161,17 @@ static void bta_ag_sco_conn_cback(uint16_t sco_idx) {
 static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
   uint16_t handle = 0;
 
-  APPL_TRACE_DEBUG(
-      "bta_ag_sco_disc_cback(): sco_idx: 0x%x  p_cur_scb: 0x%08x  sco.state: "
-      "%d",
-      sco_idx, bta_ag_cb.sco.p_curr_scb, bta_ag_cb.sco.state);
-
-  APPL_TRACE_DEBUG(
-      "bta_ag_sco_disc_cback(): scb[0] addr: 0x%08x  in_use: %u  sco_idx: 0x%x "
-      " sco state: %u",
-      &bta_ag_cb.scb[0], bta_ag_cb.scb[0].in_use, bta_ag_cb.scb[0].sco_idx,
-      bta_ag_cb.scb[0].state);
-  APPL_TRACE_DEBUG(
-      "bta_ag_sco_disc_cback(): scb[1] addr: 0x%08x  in_use: %u  sco_idx: 0x%x "
-      " sco state: %u",
-      &bta_ag_cb.scb[1], bta_ag_cb.scb[1].in_use, bta_ag_cb.scb[1].sco_idx,
-      bta_ag_cb.scb[1].state);
+  LOG_DEBUG(
+      "sco_idx: 0x%x sco.state:%s", sco_idx,
+      sco_state_text(static_cast<tSCO_STATE>(bta_ag_cb.sco.state)).c_str());
+  LOG_DEBUG(
+      "  scb[0] in_use:%s sco_idx: 0x%x sco state:%s",
+      logbool(bta_ag_cb.scb[0].in_use).c_str(), bta_ag_cb.scb[0].sco_idx,
+      sco_state_text(static_cast<tSCO_STATE>(bta_ag_cb.scb[0].state)).c_str());
+  LOG_DEBUG(
+      "  scb[1] in_use:%s sco_idx:0x%x sco state:%s",
+      logbool(bta_ag_cb.scb[1].in_use).c_str(), bta_ag_cb.scb[1].sco_idx,
+      sco_state_text(static_cast<tSCO_STATE>(bta_ag_cb.scb[1].state)).c_str());
 
   /* match callback to scb */
   if (bta_ag_cb.sco.p_curr_scb != nullptr && bta_ag_cb.sco.p_curr_scb->in_use) {
@@ -248,8 +246,8 @@ static bool bta_ag_remove_sco(tBTA_AG_SCB* p_scb, bool only_active) {
   if (p_scb->sco_idx != BTM_INVALID_SCO_INDEX) {
     if (!only_active || p_scb->sco_idx == bta_ag_cb.sco.cur_idx) {
       tBTM_STATUS status = BTM_RemoveSco(p_scb->sco_idx);
-      APPL_TRACE_DEBUG("%s: SCO index 0x%04x, status %d", __func__,
-                       p_scb->sco_idx, status);
+      LOG_DEBUG("Removed SCO index:0x%04x status:%s", p_scb->sco_idx,
+                btm_status_text(status).c_str());
       if (status == BTM_CMD_STARTED) {
         /* SCO is connected; set current control block */
         bta_ag_cb.sco.p_curr_scb = p_scb;
@@ -340,12 +338,12 @@ static void bta_ag_esco_connreq_cback(tBTM_ESCO_EVT event,
  * Returns          void
  *
  ******************************************************************************/
-static void bta_ag_cback_sco(tBTA_AG_SCB* p_scb, uint8_t event) {
+static void bta_ag_cback_sco(tBTA_AG_SCB* p_scb, tBTA_AG_EVT event) {
   tBTA_AG_HDR sco = {};
   sco.handle = bta_ag_scb_to_idx(p_scb);
   sco.app_id = p_scb->app_id;
   /* call close cback */
-  (*bta_ag_cb.p_cback)(event, (tBTA_AG*)&sco);
+  (*bta_ag_cb.p_cback)(static_cast<tBTA_AG_EVT>(event), (tBTA_AG*)&sco);
 }
 
 /*******************************************************************************
@@ -439,20 +437,19 @@ static void bta_ag_create_sco(tBTA_AG_SCB* p_scb, bool is_orig) {
 
     /* Send pending commands to create SCO connection to peer */
     bta_ag_create_pending_sco(p_scb, bta_ag_cb.sco.is_local);
-    APPL_TRACE_API("%s: orig %d, inx 0x%04x, pkt types 0x%04x", __func__,
-                   is_orig, p_scb->sco_idx, params.packet_types);
+    LOG_DEBUG("Initiating AG SCO inx 0x%04x, pkt types 0x%04x", p_scb->sco_idx,
+              params.packet_types);
   } else {
     /* Not initiating, go to listen mode */
-    tBTM_STATUS status = BTM_CreateSco(
+    tBTM_STATUS btm_status = BTM_CreateSco(
         &p_scb->peer_addr, false, params.packet_types, &p_scb->sco_idx,
         bta_ag_sco_conn_cback, bta_ag_sco_disc_cback);
-    if (status == BTM_CMD_STARTED) {
+    if (btm_status == BTM_CMD_STARTED) {
       BTM_RegForEScoEvts(p_scb->sco_idx, bta_ag_esco_connreq_cback);
     }
-
-    APPL_TRACE_API("%s: orig %d, inx 0x%04x, status 0x%x, pkt types 0x%04x",
-                   __func__, is_orig, p_scb->sco_idx, status,
-                   params.packet_types);
+    LOG_DEBUG("Listening AG SCO inx 0x%04x status:%s pkt types 0x%04x",
+              p_scb->sco_idx, btm_status_text(btm_status).c_str(),
+              params.packet_types);
   }
   APPL_TRACE_DEBUG(
       "%s: AFTER codec_updated=%d, codec_fallback=%d, "
@@ -604,21 +601,11 @@ void bta_ag_codec_negotiate(tBTA_AG_SCB* p_scb) {
   }
 }
 
-/*******************************************************************************
- *
- * Function         bta_ag_sco_event
- *
- * Description
- *
- *
- * Returns          void
- *
- ******************************************************************************/
 static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
   tBTA_AG_SCO_CB* p_sco = &bta_ag_cb.sco;
   uint8_t previous_state = p_sco->state;
-  LOG_INFO("index=0x%04x, device=%s, state=%s[%d], event=%s[%d]",
-           p_scb->sco_idx, p_scb->peer_addr.ToString().c_str(),
+  LOG_INFO("device:%s index:0x%04x state:%s[%d] event:%s[%d]",
+           PRIVATE_ADDRESS(p_scb->peer_addr), p_scb->sco_idx,
            bta_ag_sco_state_str(p_sco->state), p_sco->state,
            bta_ag_sco_evt_str(event), event);
 

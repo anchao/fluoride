@@ -28,17 +28,33 @@
 #include <cstdint>
 
 #include "device/include/controller.h"
+#include "main/shim/l2c_api.h"
+#include "main/shim/shim.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
-#include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
+#include "stack/btm/btm_int_types.h"
+#include "stack/include/acl_api.h"
 #include "stack/include/bt_types.h"
+#include "stack/include/hcimsgs.h"
 #include "stack/l2cap/l2c_int.h"
 #include "types/bt_transport.h"
 #include "types/raw_address.h"
 
-void btm_sco_acl_removed(const RawAddress* bda);
+extern tBTM_CB btm_cb;
+
+bool BTM_ReadPowerMode(const RawAddress& remote_bda, tBTM_PM_MODE* p_mode);
+bool btm_dev_support_role_switch(const RawAddress& bd_addr);
+tBTM_STATUS BTM_SetLinkSuperTout(const RawAddress& remote_bda,
+                                 uint16_t timeout);
+tBTM_STATUS btm_sec_disconnect(uint16_t handle, tHCI_STATUS reason);
+tHCI_STATUS acl_get_disconnect_reason();
+uint16_t acl_get_link_supervision_timeout();
+void btm_acl_created(const RawAddress& bda, uint16_t hci_handle,
+                     uint8_t link_role, tBT_TRANSPORT transport);
+void btm_acl_removed(uint16_t handle);
+void btm_acl_set_paging(bool value);
 void btm_ble_decrement_link_topology_mask(uint8_t link_role);
+void btm_sco_acl_removed(const RawAddress* bda);
 
 static void l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf);
 static BT_HDR* l2cu_get_next_buffer_to_send(tL2C_LCB* p_lcb);
@@ -124,6 +140,9 @@ void l2c_link_hci_conn_req(const RawAddress& bd_addr) {
 
 void l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
                             const RawAddress& p_bda) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return;
+  }
   tL2C_CONN_INFO ci;
   tL2C_LCB* p_lcb;
   tL2C_CCB* p_ccb;
@@ -168,9 +187,6 @@ void l2c_link_hci_conn_comp(uint8_t status, uint16_t handle,
 
     /* Get the peer information if the l2cap flow-control/rtrans is supported */
     l2cu_send_peer_info_req(p_lcb, L2CAP_EXTENDED_FEATURES_INFO_TYPE);
-
-    /* Tell BTM Acl management about the link */
-    btm_acl_created(ci.bd_addr, handle, p_lcb->LinkRole(), BT_TRANSPORT_BR_EDR);
 
     BTM_SetLinkSuperTout(ci.bd_addr, acl_get_link_supervision_timeout());
 
@@ -316,6 +332,10 @@ void l2c_link_sec_comp2(const RawAddress& p_bda,
  *
  ******************************************************************************/
 bool l2c_link_hci_disc_comp(uint16_t handle, uint8_t reason) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return false;
+  }
+
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_handle(handle);
   tL2C_CCB* p_ccb;
   bool status = true;
@@ -445,9 +465,9 @@ void l2c_link_timeout(tL2C_LCB* p_lcb) {
   tL2C_CCB* p_ccb;
   tBTM_STATUS rc;
 
-  LOG_DEBUG(
-      "L2CAP - l2c_link_timeout() link state %d first CCB %p is_bonding:%d",
-      p_lcb->link_state, p_lcb->ccb_queue.p_first_ccb, p_lcb->IsBonding());
+  LOG_DEBUG("L2CAP - l2c_link_timeout() link state:%s is_bonding:%s",
+            link_state_text(p_lcb->link_state).c_str(),
+            logbool(p_lcb->IsBonding()).c_str());
 
   /* If link was connecting or disconnecting, clear all channels and drop the
    * LCB */
@@ -478,6 +498,7 @@ void l2c_link_timeout(tL2C_LCB* p_lcb) {
       uint64_t timeout_ms;
       bool start_timeout = true;
 
+      LOG_WARN("TODO: Remove this callback into bcm_sec_disconnect");
       rc = btm_sec_disconnect(p_lcb->Handle(), HCI_ERR_PEER_USER);
 
       if (rc == BTM_CMD_STORED) {
@@ -725,6 +746,11 @@ void l2c_link_adjust_chnl_allocation(void) {
 }
 
 void l2c_link_init() {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    // GD L2cap gets this info through GD ACL
+    return;
+  }
+
   const controller_t* controller = controller_get_interface();
 
   l2cb.num_lm_acl_bufs = controller->get_acl_buffer_count_classic();
@@ -1137,6 +1163,9 @@ static void l2c_link_send_to_lower(tL2C_LCB* p_lcb, BT_HDR* p_buf) {
  *
  ******************************************************************************/
 void l2c_link_process_num_completed_pkts(uint8_t* p, uint8_t evt_len) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    return;
+  }
   uint8_t num_handles, xx;
   uint16_t handle;
   uint16_t num_sent;
@@ -1317,6 +1346,11 @@ void l2c_link_segments_xmitted(BT_HDR* p_msg) {
 }
 
 tBTM_STATUS l2cu_ConnectAclForSecurity(const RawAddress& bd_addr) {
+  if (bluetooth::shim::is_gd_l2cap_enabled()) {
+    bluetooth::shim::L2CA_ConnectForSecurity(bd_addr);
+    return BTM_SUCCESS;
+  }
+
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_BR_EDR);
   if (p_lcb && (p_lcb->link_state == LST_CONNECTED ||
                 p_lcb->link_state == LST_CONNECTING)) {

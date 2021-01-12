@@ -25,7 +25,8 @@
  *
  ******************************************************************************/
 
-#include <log/log.h>
+#define LOG_TAG "bluetooth"
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,7 @@
 
 #include "common/time_util.h"
 #include "device/include/controller.h"
+#include "osi/include/log.h"
 #include "osi/include/osi.h"
 
 #include "advertise_data_parser.h"
@@ -42,11 +44,16 @@
 #include "btm_int.h"
 #include "btu.h"
 #include "hcidefs.h"
-#include "hcimsgs.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/shim.h"
+#include "stack/btm/btm_ble_int.h"
+#include "stack/btm/btm_int_types.h"
 #include "stack/include/acl_api.h"
+#include "stack/include/btm_ble_api.h"
+#include "stack/include/hcimsgs.h"
 #include "stack/include/inq_hci_link_interface.h"
+
+extern tBTM_CB btm_cb;
 
 extern void btm_inq_remote_name_timer_timeout(void* data);
 extern tBTM_STATUS btm_ble_read_remote_name(const RawAddress& remote_bda,
@@ -425,6 +432,8 @@ void BTM_CancelInquiry(void) {
     return;
   }
 
+  btm_cb.history_->Push("%-32s", "Inquiry scan stopped");
+
   tBTM_INQUIRY_VAR_ST* p_inq = &btm_cb.btm_inq_vars;
   BTM_TRACE_API("BTM_CancelInquiry called");
 
@@ -439,7 +448,7 @@ void BTM_CancelInquiry(void) {
     p_inq->p_inq_cmpl_cb = NULL;    /* Do not notify caller anymore */
 
     if ((p_inq->inqparms.mode & BTM_BR_INQUIRY_MASK) != 0) {
-      btsnd_hcic_inq_cancel();
+      bluetooth::legacy::hci::GetInterface().InquiryCancel();
     }
     if ((p_inq->inqparms.mode & BTM_BLE_INQUIRY_MASK) != 0)
       btm_ble_stop_inquiry();
@@ -505,6 +514,8 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_RESULTS_CB* p_results_cb,
     return BTM_WRONG_MODE;
   }
 
+  btm_cb.history_->Push("%-32s", "Inquiry scan started");
+
   /* Save the inquiry parameters to be used upon the completion of
    * setting/clearing the inquiry filter */
   p_inq->inqparms = {};
@@ -540,7 +551,8 @@ tBTM_STATUS BTM_StartInquiry(tBTM_INQ_RESULTS_CB* p_results_cb,
   p_inq->max_bd_entries =
       (uint16_t)(BT_DEFAULT_BUFFER_SIZE / sizeof(tINQ_BDADDR));
 
-  btsnd_hcic_inquiry(general_inq_lap, p_inq->inqparms.duration, 0);
+  bluetooth::legacy::hci::GetInterface().StartInquiry(
+      general_inq_lap, p_inq->inqparms.duration, 0);
   return BTM_CMD_STARTED;
 }
 
@@ -809,6 +821,10 @@ void btm_inq_db_init(void) {
   btm_cb.btm_inq_vars.no_inc_ssp = BTM_NO_SSP_ON_INQUIRY;
 }
 
+void btm_inq_db_free(void) {
+  alarm_free(btm_cb.btm_inq_vars.remote_name_timer);
+}
+
 /*******************************************************************************
  *
  * Function         btm_inq_stop_on_ssp
@@ -832,7 +848,7 @@ void btm_inq_stop_on_ssp(void) {
       if (btm_cb.btm_inq_vars.inq_active & normal_active) {
         /* can not call BTM_CancelInquiry() here. We need to report inquiry
          * complete evt */
-        btsnd_hcic_inq_cancel();
+        bluetooth::legacy::hci::GetInterface().InquiryCancel();
       }
     }
     /* do not allow inquiry to start */

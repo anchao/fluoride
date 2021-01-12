@@ -38,6 +38,8 @@
 #include "osi/include/fixed_queue.h"
 #include "osi/include/log.h"
 #include "osi/include/osi.h"
+#include "stack/include/acl_client_callbacks.h"
+#include "stack/include/btm_client_interface.h"
 #include "utl.h"
 
 void BTIF_dm_on_hw_error();
@@ -84,7 +86,7 @@ void BTA_sys_signal_hw_error() {
  * Returns          void
  *
  ******************************************************************************/
-void bta_sys_event(BT_HDR* p_msg) {
+static void bta_sys_event(BT_HDR* p_msg) {
   uint8_t id;
   bool freebuf = true;
 

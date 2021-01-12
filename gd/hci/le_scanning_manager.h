@@ -20,26 +20,57 @@
 #include "common/callback.h"
 #include "hci/hci_packets.h"
 #include "hci/le_report.h"
+#include "hci/uuid.h"
 #include "module.h"
 
 namespace bluetooth {
 namespace hci {
 
-class LeScanningManagerCallbacks {
+using ScannerId = uint8_t;
+
+class ScanningCallback {
  public:
-  virtual ~LeScanningManagerCallbacks() = default;
-  virtual void on_advertisements(std::vector<std::shared_ptr<LeReport>>) = 0;
-  virtual void on_timeout() = 0;
-  virtual os::Handler* Handler() = 0;
+  enum ScanningStatus {
+    SUCCESS,
+    NO_RESOURCES = 0x80,
+    INTERNAL_ERROR = 0x85,
+  };
+
+  virtual ~ScanningCallback() = default;
+  virtual void OnScannerRegistered(
+      const bluetooth::hci::Uuid app_uuid, ScannerId scanner_id, ScanningStatus status) = 0;
+  virtual void OnScanResult(
+      uint16_t event_type,
+      uint8_t address_type,
+      Address address,
+      uint8_t primary_phy,
+      uint8_t secondary_phy,
+      uint8_t advertising_sid,
+      int8_t tx_power,
+      int8_t rssi,
+      uint16_t periodic_advertising_interval,
+      std::vector<GapData> advertising_data) = 0;
+  virtual void OnTrackAdvFoundLost() = 0;
+  virtual void OnBatchScanReports(
+      int client_if, int status, int report_format, int num_records, std::vector<uint8_t> data) = 0;
+  virtual void OnTimeout() = 0;
 };
 
 class LeScanningManager : public bluetooth::Module {
  public:
+  static constexpr uint8_t kMaxAppNum = 32;
+  static constexpr uint8_t kAdvertisingDataInfoNotPresent = 0xff;
+  static constexpr uint8_t kTxPowerInformationNotPresent = 0x7f;
+  static constexpr uint8_t kNotPeriodicAdvertisement = 0x00;
   LeScanningManager();
 
-  void StartScan(LeScanningManagerCallbacks* callbacks);
+  void RegisterScanner(const Uuid app_uuid);
 
-  void StopScan(common::Callback<void()> on_stopped);
+  void Unregister(ScannerId scanner_id);
+
+  void Scan(bool start);
+
+  void RegisterScanningCallback(ScanningCallback* scanning_callback);
 
   static const ModuleFactory Factory;
 

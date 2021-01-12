@@ -482,3 +482,86 @@ void ParentDef::GenInstanceOf(std::ostream& s) const {
     s << "return true;}";
   }
 }
+
+const ParentDef* ParentDef::GetRootDef() const {
+  if (parent_ == nullptr) {
+    return this;
+  }
+
+  return parent_->GetRootDef();
+}
+
+std::vector<const ParentDef*> ParentDef::GetAncestors() const {
+  std::vector<const ParentDef*> res;
+  auto parent = parent_;
+  while (parent != nullptr) {
+    res.push_back(parent);
+    parent = parent->parent_;
+  }
+  std::reverse(res.begin(), res.end());
+  return res;
+}
+
+std::map<std::string, std::variant<int64_t, std::string>> ParentDef::GetAllConstraints() const {
+  std::map<std::string, std::variant<int64_t, std::string>> res;
+  res.insert(parent_constraints_.begin(), parent_constraints_.end());
+  for (auto parent : GetAncestors()) {
+    res.insert(parent->parent_constraints_.begin(), parent->parent_constraints_.end());
+  }
+  return res;
+}
+
+bool ParentDef::HasAncestorNamed(std::string name) const {
+  auto parent = parent_;
+  while (parent != nullptr) {
+    if (parent->name_ == name) {
+      return true;
+    }
+    parent = parent->parent_;
+  }
+  return false;
+}
+
+std::string ParentDef::FindConstraintField() const {
+  std::string res;
+  for (const auto& child : children_) {
+    if (!child->parent_constraints_.empty()) {
+      return child->parent_constraints_.begin()->first;
+    }
+    res = child->FindConstraintField();
+  }
+  return res;
+}
+
+std::map<const ParentDef*, const std::variant<int64_t, std::string>>
+    ParentDef::FindDescendantsWithConstraint(
+    std::string constraint_name) const {
+  std::map<const ParentDef*, const std::variant<int64_t, std::string>> res;
+
+  for (auto const& child : children_) {
+    auto constraint = child->parent_constraints_.find(constraint_name);
+    if (constraint != child->parent_constraints_.end()) {
+      res.insert(std::pair(child, constraint->second));
+    }
+    auto m = child->FindDescendantsWithConstraint(constraint_name);
+    res.insert(m.begin(), m.end());
+  }
+  return res;
+}
+
+std::vector<const ParentDef*> ParentDef::FindPathToDescendant(std::string descendant) const {
+  std::vector<const ParentDef*> res;
+
+  for (auto const& child : children_) {
+    auto v = child->FindPathToDescendant(descendant);
+    if (v.size() > 0) {
+      res.insert(res.begin(), v.begin(), v.end());
+      res.push_back(child);
+    }
+    if (child->name_ == descendant) {
+      res.push_back(child);
+      return res;
+    }
+  }
+  return res;
+}
