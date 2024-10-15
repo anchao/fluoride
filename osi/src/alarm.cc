@@ -33,6 +33,7 @@
 #include <signal.h>
 #include <string.h>
 #include <time.h>
+#include <sys/prctl.h>
 
 #include <hardware/bluetooth.h>
 
@@ -49,8 +50,11 @@
 #include "stack/include/btu.h"
 
 #ifndef CLOCK_BOOTTIME
-#define CLOCK_BOOTTIME_ALARM  CLOCK_REALTIME
 #define CLOCK_BOOTTIME        CLOCK_REALTIME
+#endif
+
+#ifndef CLOCK_BOOTTIME_ALARM
+#define CLOCK_BOOTTIME_ALARM  CLOCK_REALTIME
 #endif
 
 using base::Bind;

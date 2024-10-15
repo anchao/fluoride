@@ -38,6 +38,7 @@
 #include <termios.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 
 #include <base/bind.h>
 #include <base/location.h>
@@ -81,7 +82,7 @@ extern void acl_event_received(BT_HDR* packet);
 extern void iso_data_received(BT_HDR* packet);
 
 static pthread_mutex_t g_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
-static struct file     g_filep;
+static struct file     *g_filep;
 static int             g_fd = -1;
 
 void hci_close() { }
@@ -106,7 +107,7 @@ static int h4_recv_data(uint8_t *buf, int count)
   int ret, nread = 0;
 
   while (count != nread) {
-    ret = file_read(&g_filep, buf + nread, count - nread);
+    ret = file_read(g_filep, buf + nread, count - nread);
     if (ret < 0) {
       if (ret == -EAGAIN) {
         usleep(500);
@@ -126,7 +127,7 @@ static int h4_send_data(uint8_t *buf, int count)
   int ret, nwritten = 0;
 
   while (nwritten != count) {
-    ret = file_write(&g_filep, buf + nwritten, count - nwritten);
+    ret = file_write(g_filep, buf + nwritten, count - nwritten);
     if (ret < 0) {
       if (ret == -EAGAIN) {
         usleep(500);
@@ -265,13 +266,13 @@ void hci_initialize(void)
   int ret;
 
   if (g_fd > 0)
-    return OK;
+    return;
 
   g_fd = open(CONFIG_FLUORIDE_HCI_UART_NAME, O_RDWR | O_BINARY);
   if (g_fd < 0)
     return;
 
-  if (file_detach(g_fd, &g_filep) < 0)
+  if (fs_getfilep(g_fd, &g_filep) < 0)
     goto bail;
 
   pthread_attr_init(&pattr);
