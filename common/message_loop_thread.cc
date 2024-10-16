@@ -51,14 +51,8 @@ void MessageLoopThread::StartUp() {
 
       return;
     }
-    if (stack_size_ != 0) {
-      std::thread::attributes attrs;
-      attrs.stack_size(stack_size_);
-      thread_ = new std::thread(attrs, &MessageLoopThread::RunThread, this,
-                                std::move(start_up_promise));
-    } else
-      thread_ = new std::thread(&MessageLoopThread::RunThread, this,
-                                std::move(start_up_promise));
+    thread_ = new std::thread(&MessageLoopThread::RunThread, this,
+        std::move(start_up_promise));
   }
   start_up_future.wait();
 }

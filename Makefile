@@ -230,20 +230,6 @@ ifneq ($(CONFIG_CODEC_SBC),)
 CSRCS += $(wildcard embdrv/sbc/*/srce/*.c)
 endif
 
-  CXXSRCS += stack/a2dp/a2dp_aac.cc
-  CXXSRCS += stack/a2dp/a2dp_aac_decoder.cc
-  CXXSRCS += stack/a2dp/a2dp_aac_encoder.cc
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libAACdec/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libAACenc/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libFDK/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libSYS/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libSBRdec/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libMpegTPDec/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libPCMutils/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libArithCoding/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libDRCdec/include}
-  FLRDFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/aac/libSACdec/include}
-
 ifneq ($(CONFIG_CODEC_LDAC),)
   CXXSRCS += stack/a2dp/a2dp_vendor_ldac.cc
 
